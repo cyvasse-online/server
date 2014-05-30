@@ -1,3 +1,5 @@
+SUBDIRS = libb64
+
 AUTOMAKE_OPTIONS = subdir-objects
 
 AM_CXXFLAGS = \
@@ -10,5 +12,10 @@ cyvasse_server_SOURCES = \
 	src/cyvasse_server.hpp \
 	src/main.cpp
 
+cyvasse_server_CXXFLAGS = \
+	$(AM_CXXFLAGS) \
+	-I $(top_srcdir)/libb64/include
+
 cyvasse_server_LDADD = \
+	$(top_builddir)/libb64/src/libb64.a \
 	-lboost_system

@@ -7,5 +7,6 @@ AC_LANG(C++)
 
 AC_CHECK_HEADER([websocketpp/version.hpp], [], AC_MSG_ERROR([websocket++ headers not found]))
 
+AC_CONFIG_SUBDIRS([libb64])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

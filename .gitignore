@@ -17,6 +17,15 @@ Makefile.in
 
 cyvasse-server
 
+base64
+c-example1
+c-example2
+decoded.txt
+encoded.txt
+
+depend
+
+*.a
 *.o
 
 # Other
