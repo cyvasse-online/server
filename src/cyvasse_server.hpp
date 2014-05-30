@@ -18,65 +18,37 @@
 
 #include <iostream>
 #include <condition_variable>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-/* on_open insert connection_hdl into channel
- * on_close remove connection_hdl from channel
- * on_message queue send to all channels
- */
-
-enum action_type
-{
-	SUBSCRIBE,
-	UNSUBSCRIBE,
-	MESSAGE
-};
-
-struct action
-{
-	action(action_type t, websocketpp::connection_hdl h)
-		: type(t)
-		, hdl(h)
-	{
-	}
-
-	action(action_type t, websocketpp::connection_hdl h, server::message_ptr m)
-		: type(t), hdl(h), msg(m)
-	{
-	}
-
-	action_type type;
-	websocketpp::connection_hdl hdl;
-	server::message_ptr msg;
-};
-
 class CyvasseServer
 {
 	private:
-		typedef std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> con_list;
+		typedef std::map<websocketpp::connection_hdl, unsigned long, std::owner_less<websocketpp::connection_hdl>> ConList;
+		typedef std::pair<websocketpp::connection_hdl, server::message_ptr> Job;
+		typedef std::queue<std::unique_ptr<Job>> JobQueue;
 
 		server _server;
-		con_list _connections;
-		std::queue<action> _actions;
+		ConList _connections;
+		JobQueue _jobQueue;
+		std::set<std::unique_ptr<std::thread>> _workerThreads;
 
-		std::mutex _action_lock;
-		std::mutex _connection_lock;
-		std::condition_variable _action_cond;
+		std::mutex _jobLock;
+		std::mutex _connectionLock;
+		std::condition_variable _jobCond;
 
 	public:
 		CyvasseServer();
+		~CyvasseServer();
 
-		void run(uint16_t port);
-
-		void on_open(websocketpp::connection_hdl hdl);
-		void on_close(websocketpp::connection_hdl hdl);
-		void on_message(websocketpp::connection_hdl hdl, server::message_ptr msg);
-
-		void process_messages();
+		void run(uint16_t port, unsigned nWorkerThreads);
+		void onMessage(websocketpp::connection_hdl hdl, server::message_ptr msg);
+		void processMessages();
 };

@@ -15,24 +15,16 @@
  */
 
 #include <iostream>
-#include <thread>
 #include "cyvasse_server.hpp"
 
 int main()
 {
 	try
 	{
-		CyvasseServer server_instance;
-
-		// Start a thread to run the processing loop
-		std::thread t(std::bind(&CyvasseServer::process_messages, &server_instance));
-
-		// Run the asio loop with the main thread
-		server_instance.run(9002);
-
-		t.join();
+		CyvasseServer s;
+		s.run(2516, 1);
 	}
-	catch(std::exception & e)
+	catch(std::exception& e)
 	{
 		std::cerr << e.what() << std::endl;
 	}

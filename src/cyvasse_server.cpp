@@ -18,106 +18,64 @@
 
 CyvasseServer::CyvasseServer()
 {
+	using std::placeholders::_1;
+	using std::placeholders::_2;
+
 	// Initialize Asio Transport
 	_server.init_asio();
 
-	// Register handler callbacks
-	_server.set_open_handler(bind(&CyvasseServer::on_open, this, ::_1));
-	_server.set_close_handler(bind(&CyvasseServer::on_close, this, ::_1));
-	_server.set_message_handler(bind(&CyvasseServer::on_message, this, ::_1, ::_2));
+	// Register handler callback
+	_server.set_message_handler(std::bind(&CyvasseServer::onMessage, this, _1, _2));
 }
 
-void CyvasseServer::run(uint16_t port)
+CyvasseServer::~CyvasseServer()
 {
-	// listen on specified port
+	for(const std::unique_ptr<std::thread>& it : _workerThreads)
+		it->join();
+}
+
+void CyvasseServer::run(uint16_t port, unsigned nWorkerThreads)
+{
+	// start worker threads
+	assert(nWorkerThreads != 0);
+	for(int i = 0; i < nWorkerThreads; i++)
+		_workerThreads.emplace(new std::thread(std::bind(&CyvasseServer::processMessages, this)));
+
+	// Listen on the specified port
 	_server.listen(port);
 
 	// Start the server accept loop
 	_server.start_accept();
 
 	// Start the ASIO io_service run loop
-	try
-	{
-		_server.run();
-	}
-	catch(const std::exception & e)
-	{
-		std::cerr << e.what() << std::endl;
-	}
-	catch(websocketpp::lib::error_code e)
-	{
-		std::cerr << e.message() << std::endl;
-	}
-	catch(...)
-	{
-		std::cerr << "other exception" << std::endl;
-	}
+	_server.run();
 }
 
-void CyvasseServer::on_open(websocketpp::connection_hdl hdl)
+void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, server::message_ptr msg)
 {
-	std::unique_lock<std::mutex> lock(_action_lock);
-	//std::cout << "on_open" << std::endl;
-	_actions.push(action(SUBSCRIBE,hdl));
+	// Queue message up for sending by processing thread
+	std::unique_lock<std::mutex> lock(_jobLock);
+
+	_jobQueue.emplace(new Job(hdl, msg));
+
 	lock.unlock();
-	_action_cond.notify_one();
+	_jobCond.notify_one();
 }
 
-void CyvasseServer::on_close(websocketpp::connection_hdl hdl)
-{
-	std::unique_lock<std::mutex> lock(_action_lock);
-	//std::cout << "on_close" << std::endl;
-	_actions.push(action(UNSUBSCRIBE,hdl));
-	lock.unlock();
-	_action_cond.notify_one();
-}
-
-void CyvasseServer::on_message(websocketpp::connection_hdl hdl, server::message_ptr msg)
-{
-	// queue message up for sending by processing thread
-	std::unique_lock<std::mutex> lock(_action_lock);
-	//std::cout << "on_message" << std::endl;
-	_actions.push(action(MESSAGE,hdl,msg));
-	lock.unlock();
-	_action_cond.notify_one();
-}
-
-void CyvasseServer::process_messages()
+void CyvasseServer::processMessages()
 {
 	while(true)
 	{
-		std::unique_lock<std::mutex> lock(_action_lock);
+		std::unique_lock<std::mutex> lock(_jobLock);
 
-		while(_actions.empty())
-		{
-			_action_cond.wait(lock);
-		}
+		while(_jobQueue.empty())
+			_jobCond.wait(lock);
 
-		action a = _actions.front();
-		_actions.pop();
+		std::unique_ptr<Job> job = std::move(_jobQueue.front());
+		_jobQueue.pop();
 
 		lock.unlock();
 
-		if (a.type == SUBSCRIBE)
-		{
-			std::unique_lock<std::mutex> con_lock(_connection_lock);
-			_connections.insert(a.hdl);
-		}
-		else if (a.type == UNSUBSCRIBE)
-		{
-			std::unique_lock<std::mutex> con_lock(_connection_lock);
-			_connections.erase(a.hdl);
-		}
-		else if (a.type == MESSAGE)
-		{
-			std::unique_lock<std::mutex> con_lock(_connection_lock);
-
-			for (con_list::iterator it = _connections.begin(); it != _connections.end(); ++it)
-				_server.send(*it,a.msg);
-		}
-		else
-		{
-			// undefined.
-		}
+		/* Process job */
 	}
 }
