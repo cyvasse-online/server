@@ -1,3 +1,6 @@
 [submodule "libb64"]
 	path = libb64
 	url = https://github.com/cyvasse-online/libb64.git
+[submodule "cyvmath"]
+	path = cyvmath
+	url = https://github.com/cyvasse-online/cyvmath.git

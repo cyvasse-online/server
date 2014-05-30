@@ -16,6 +16,7 @@ Makefile.in
 # Compiled files
 
 cyvasse-server
+cyvasse-tests
 
 base64
 c-example1
