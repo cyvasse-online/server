@@ -29,11 +29,10 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-typedef websocketpp::server<websocketpp::config::asio> server;
-
 class CyvasseServer
 {
 	private:
+		typedef websocketpp::server<websocketpp::config::asio> server;
 		typedef std::map<websocketpp::connection_hdl, unsigned long, std::owner_less<websocketpp::connection_hdl>> ConList;
 		typedef std::pair<websocketpp::connection_hdl, server::message_ptr> Job;
 		typedef std::queue<std::unique_ptr<Job>> JobQueue;

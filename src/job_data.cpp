@@ -89,7 +89,7 @@ std::string JobData::serialize()
 	return Json::FastWriter().write(data);
 }
 
-void JobData::deserialze(const std::string& json)
+void JobData::deserialize(const std::string& json)
 {
 	Json::Value data;
 	Json::Reader reader;

@@ -49,8 +49,14 @@ struct JobData
 		JoinGameData joinGame;
 	};
 
+	JobData() = default;
+	JobData(const std::string& json)
+	{
+		deserialize(json);
+	}
+
 	std::string serialize();
-	void deserialze(const std::string&);
+	void deserialize(const std::string& json);
 };
 
 #endif // _JOB_DATA_HPP_

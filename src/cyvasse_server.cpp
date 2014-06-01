@@ -16,11 +16,13 @@
 
 #include "cyvasse_server.hpp"
 
-// default value
+// for libb64, default value
 #define BUFFERSIZE 16777216
+
 #include <b64/encode.h>
 #include <b64/decode.h>
-
+#include <jsoncpp/json/value.h>
+#include <jsoncpp/json/writer.h>
 #include "job_data.hpp"
 
 // these two function should be removed
@@ -127,19 +129,18 @@ void CyvasseServer::processMessages()
 		lock.unlock();
 
 		/* Process job */
-		JobData data; // TODO: Deserialize job->second into this
+		JobData data(job->second->get_payload());
 
+		Json::Value val;
 		switch(data.action)
 		{
 			case UNDEFINED:
-				// TODO: Write error message to client
+				val["success"] = false;
+				val["error"] = "requested action is unknown";
 				break;
 			case CREATE_GAME:
-				{
-					std::string b64ID = intToB64ID(_nextID++);
-				}
-				// TODO: Compose answer message with
-				// this ID and send it to the client
+				val["success"] = true;
+				val["b64ID"] = intToB64ID(_nextID++);
 				break;
 			case JOIN_GAME:
 				// TODO
@@ -148,5 +149,6 @@ void CyvasseServer::processMessages()
 				assert(0);
 				break;
 		}
+		_server.send(job->first, Json::FastWriter().write(val), websocketpp::frame::opcode::text);
 	}
 }
