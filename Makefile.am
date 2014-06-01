@@ -10,6 +10,7 @@ bin_PROGRAMS = cyvasse-server
 cyvasse_server_SOURCES = \
 	src/cyvasse_server.cpp \
 	src/cyvasse_server.hpp \
+	src/job_data.hpp \
 	src/main.cpp
 
 cyvasse_server_CXXFLAGS = \

@@ -14,20 +14,40 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <iostream>
-#include "cyvasse_server.hpp"
+#ifndef _JOB_DATA_HPP_
+#define _JOB_DATA_HPP_
 
-int main()
+#include <string>
+
+enum ActionType
 {
-	try
-	{
-		CyvasseServer s;
-		s.run(2516, 1);
-	}
-	catch(std::exception& e)
-	{
-		std::cerr << e.what() << std::endl;
-	}
+	UNDEFINED,
+	CREATE_GAME,
+	JOIN_GAME
+};
 
-	return 0;
-}
+struct JobData
+{
+	struct CreateGameData
+	{
+		enum RuleSet
+		{
+			UNDEFINED,
+			MIKELEPAGE
+		} ruleSet;
+	};
+
+	struct JoinGameData
+	{
+		std::string b64ID;
+	};
+
+	ActionType requestedAction;
+	union
+	{
+		CreateGameData createGame;
+		JoinGameData joinGame;
+	};
+};
+
+#endif // _JOB_DATA_HPP_

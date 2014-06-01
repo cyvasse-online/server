@@ -14,6 +14,9 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef _CYVASSE_SERVER_HPP_
+#define _CYVASSE_SERVER_HPP_
+
 #define _WEBSOCKETPP_CPP11_STL_
 
 #include <iostream>
@@ -44,6 +47,10 @@ class CyvasseServer
 		std::mutex _connectionLock;
 		std::condition_variable _jobCond;
 
+		// will be replaced by a database key somewhen
+		// TODO: make acces to this thread-safe (probably isn't)
+		static uint64_t _nextID;
+
 	public:
 		CyvasseServer();
 		~CyvasseServer();
@@ -52,3 +59,5 @@ class CyvasseServer
 		void onMessage(websocketpp::connection_hdl hdl, server::message_ptr msg);
 		void processMessages();
 };
+
+#endif // _CYVASSE_SERVER_HPP_

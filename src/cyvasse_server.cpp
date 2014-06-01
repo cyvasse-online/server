@@ -16,6 +16,54 @@
 
 #include "cyvasse_server.hpp"
 
+// default value
+#define BUFFERSIZE 16777216
+#include <b64/encode.h>
+#include <b64/decode.h>
+
+// these two function should be removed
+// if libb64 gets a better API somewhen
+// they work but have a very weird 'overflow'
+// limit after which the conversions
+// fail... This limit is:
+// decimal: 17365880163140632575
+// hexadecimal: F0FFFFFFFFFFFFFF
+// Also, they don't use the encodeend stuff
+// because I don't understand it and it
+// produced weird output.
+std::string intToB64ID(uint64_t intVal)
+{
+	base64::encoder enc;
+	base64_init_encodestate(&enc._state);
+
+	char* cstr = new char[11];
+	enc.encode(reinterpret_cast<char*>(&intVal), 8, cstr);
+	cstr[10] = '\0';
+
+	std::string retStr(cstr);
+	// it's no problem to use a '/' in the URL, but '_' looks better
+	for(size_t pos = retStr.find('/'); pos != std::string::npos; pos = retStr.find('/', pos + 1))
+		retStr.at(pos) = '_';
+
+	return retStr;
+}
+
+uint64_t b64IDToInt(std::string b64ID)
+{
+	for(size_t pos = b64ID.find('_'); pos != std::string::npos; pos = b64ID.find('_', pos + 1))
+		b64ID.at(pos) = '/';
+
+	base64::decoder dec;
+	base64_init_decodestate(&dec._state);
+
+	char* ret = new char[8];
+	dec.decode(b64ID.c_str(), 10, ret);
+
+	return *(reinterpret_cast<uint64_t*>(ret));
+}
+
+uint64_t CyvasseServer::_nextID = 1;
+
 CyvasseServer::CyvasseServer()
 {
 	using std::placeholders::_1;
@@ -77,5 +125,24 @@ void CyvasseServer::processMessages()
 		lock.unlock();
 
 		/* Process job */
+		JobData data; // TODO: Deserialize job->second into this
+
+		switch(data.requestedAction)
+		{
+			case UNDEFINED:
+				// TODO: Write error message to client
+				break;
+			case CREATE_GAME:
+				std::string b64ID = intToB64ID(_nextID++);
+				// TODO: Compose answer message with
+				// this ID and send it to the client
+				break;
+			case JOIN_GAME:
+				// TODO
+				break;
+			default:
+				assert(0);
+				break;
+		}
 	}
 }
