@@ -21,6 +21,8 @@
 #include <b64/encode.h>
 #include <b64/decode.h>
 
+#include "job_data.hpp"
+
 // these two function should be removed
 // if libb64 gets a better API somewhen
 // they work but have a very weird 'overflow'
@@ -127,13 +129,15 @@ void CyvasseServer::processMessages()
 		/* Process job */
 		JobData data; // TODO: Deserialize job->second into this
 
-		switch(data.requestedAction)
+		switch(data.action)
 		{
 			case UNDEFINED:
 				// TODO: Write error message to client
 				break;
 			case CREATE_GAME:
-				std::string b64ID = intToB64ID(_nextID++);
+				{
+					std::string b64ID = intToB64ID(_nextID++);
+				}
 				// TODO: Compose answer message with
 				// this ID and send it to the client
 				break;

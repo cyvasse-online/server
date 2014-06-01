@@ -39,15 +39,18 @@ struct JobData
 
 	struct JoinGameData
 	{
-		std::string b64ID;
+		char b64ID[11];
 	};
 
-	ActionType requestedAction;
+	ActionType action;
 	union
 	{
 		CreateGameData createGame;
 		JoinGameData joinGame;
 	};
+
+	std::string serialize();
+	void deserialze(const std::string&);
 };
 
 #endif // _JOB_DATA_HPP_

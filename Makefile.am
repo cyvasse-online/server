@@ -10,6 +10,7 @@ bin_PROGRAMS = cyvasse-server
 cyvasse_server_SOURCES = \
 	src/cyvasse_server.cpp \
 	src/cyvasse_server.hpp \
+	src/job_data.cpp \
 	src/job_data.hpp \
 	src/main.cpp
 
@@ -19,4 +20,5 @@ cyvasse_server_CXXFLAGS = \
 
 cyvasse_server_LDADD = \
 	$(top_builddir)/libb64/src/libb64.a \
-	-lboost_system
+	-lboost_system \
+	-ljsoncpp
