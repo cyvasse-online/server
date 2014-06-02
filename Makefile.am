@@ -14,9 +14,12 @@ cyvasse_server_SOURCES = \
 	src/job_data.hpp \
 	src/main.cpp
 
-cyvasse_server_CXXFLAGS = \
-	$(AM_CXXFLAGS) \
-	-I $(top_srcdir)/libb64/include
+cyvasse_server_CPPFLAGS = \
+	-I$(top_srcdir)/libb64/include \
+	-pthread
+
+cyvasse_server_LDFLAGS = \
+	-pthread
 
 cyvasse_server_LDADD = \
 	$(top_builddir)/libb64/src/libb64.a \
