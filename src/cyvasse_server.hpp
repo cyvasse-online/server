@@ -19,11 +19,13 @@
 
 #define _WEBSOCKETPP_CPP11_STL_
 
+#include <atomic>
 #include <iostream>
 #include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <set>
 #include <thread>
 #include <websocketpp/config/asio_no_tls.hpp>
@@ -46,9 +48,10 @@ class CyvasseServer
 		std::mutex _connectionLock;
 		std::condition_variable _jobCond;
 
-		// will be replaced by a database key somewhen
-		// TODO: make acces to this thread-safe (probably isn't)
-		static uint64_t _nextID;
+		std::atomic<bool> _running;
+
+		std::ranlux24 _int24Generator;
+		std::ranlux48 _int48Generator;
 
 	public:
 		CyvasseServer();

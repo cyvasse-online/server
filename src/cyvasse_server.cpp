@@ -19,30 +19,29 @@
 // for libb64, default value
 #define BUFFERSIZE 16777216
 
+#include <chrono>
 #include <b64/encode.h>
 #include <b64/decode.h>
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
 #include "job_data.hpp"
 
-// these two function should be removed
-// if libb64 gets a better API somewhen
-// they work but have a very weird 'overflow'
-// limit after which the conversions
-// fail... This limit is:
-// decimal: 17365880163140632575
-// hexadecimal: F0FFFFFFFFFFFFFF
-// Also, they don't use the encodeend stuff
-// because I don't understand it and it
-// produced weird output.
-std::string intToB64ID(uint64_t intVal)
+// this function starts with _ because it's not universally usable
+// (it ignores the last 1/4 of bytes of the parameter value)
+// I wonder if this function relies on the
+// endianness of the executing machine o.O
+template <typename IntType>
+std::string _intToB64ID(IntType intVal)
 {
+	const int size = sizeof(IntType) / 4 * 3; // ignore the first 1/4 bytes
+	const int sizeEnc = sizeof(IntType); // base64 adds 1/3 of size again
+
 	base64::encoder enc;
 	base64_init_encodestate(&enc._state);
 
-	char* cstr = new char[11];
-	enc.encode(reinterpret_cast<char*>(&intVal), 8, cstr);
-	cstr[10] = '\0';
+	char* cstr = new char[sizeEnc + 1];
+	enc.encode(reinterpret_cast<char*>(&intVal), size, cstr);
+	cstr[sizeEnc] = '\0';
 
 	std::string retStr(cstr);
 	// it's no problem to use a '/' in the URL, but '_' looks better
@@ -52,26 +51,19 @@ std::string intToB64ID(uint64_t intVal)
 	return retStr;
 }
 
-uint64_t b64IDToInt(std::string b64ID)
-{
-	for(size_t pos = b64ID.find('_'); pos != std::string::npos; pos = b64ID.find('_', pos + 1))
-		b64ID.at(pos) = '/';
-
-	base64::decoder dec;
-	base64_init_decodestate(&dec._state);
-
-	char* ret = new char[8];
-	dec.decode(b64ID.c_str(), 10, ret);
-
-	return *(reinterpret_cast<uint64_t*>(ret));
-}
-
-uint64_t CyvasseServer::_nextID = 1;
+#define int24ToB64ID(x) \
+	_intToB64ID<uint32_t>(x)
+#define int48ToB64ID(x) \
+	_intToB64ID<uint64_t>(x)
 
 CyvasseServer::CyvasseServer()
+	: _int24Generator(std::chrono::system_clock::now().time_since_epoch().count())
+	, _int48Generator(std::chrono::system_clock::now().time_since_epoch().count())
 {
 	using std::placeholders::_1;
 	using std::placeholders::_2;
+
+	_running = true;
 
 	// Initialize Asio Transport
 	_server.init_asio();
@@ -82,6 +74,9 @@ CyvasseServer::CyvasseServer()
 
 CyvasseServer::~CyvasseServer()
 {
+	_running = false;
+	_jobCond.notify_all();
+
 	for(const std::unique_ptr<std::thread>& it : _workerThreads)
 		it->join();
 }
@@ -120,8 +115,11 @@ void CyvasseServer::processMessages()
 	{
 		std::unique_lock<std::mutex> lock(_jobLock);
 
-		while(_jobQueue.empty())
+		while(_running && _jobQueue.empty())
 			_jobCond.wait(lock);
+
+		if(!_running)
+			break;
 
 		std::unique_ptr<Job> job = std::move(_jobQueue.front());
 		_jobQueue.pop();
@@ -140,7 +138,7 @@ void CyvasseServer::processMessages()
 				break;
 			case CREATE_GAME:
 				val["success"] = true;
-				val["b64ID"] = intToB64ID(_nextID++);
+				val["b64ID"] = int24ToB64ID(_int24Generator());
 				break;
 			case JOIN_GAME:
 				// TODO
