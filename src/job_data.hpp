@@ -18,28 +18,57 @@
 #define _JOB_DATA_HPP_
 
 #include <string>
+#include <cyvmath/common.hpp>
+
+using namespace cyvmath;
 
 enum ActionType
 {
-	UNDEFINED,
-	CREATE_GAME,
-	JOIN_GAME
+	ACTION_UNDEFINED,
+	ACTION_CREATE_GAME,
+	ACTION_JOIN_GAME,
+	ACTION_RESUME_GAME,
+	ACTION_START,
+	ACTION_MOVE_PIECE,
+	ACTION_RESIGN
 };
+
+ENUM_STR_PROT(ActionType)
+
+enum RuleSet
+{
+	RULESET_UNDEFINED,
+	RULESET_MIKELEPAGE
+};
+
+ENUM_STR_PROT(RuleSet)
 
 struct JobData
 {
 	struct CreateGameData
 	{
-		enum RuleSet
-		{
-			UNDEFINED,
-			MIKELEPAGE
-		} ruleSet;
+		RuleSet ruleSet;
+		PlayersColor color;
 	};
 
 	struct JoinGameData
 	{
-		char b64ID[11];
+		char b64ID[5];
+	};
+
+	struct ResumeGameData
+	{
+		char resumeToken[9];
+	};
+
+	struct StartData
+	{
+		// piece positions
+	};
+
+	struct MovePieceData
+	{
+		// from, to
 	};
 
 	ActionType action;
@@ -47,6 +76,9 @@ struct JobData
 	{
 		CreateGameData createGame;
 		JoinGameData joinGame;
+		ResumeGameData resumeGame;
+		StartData start;
+		MovePieceData movePiece;
 	};
 
 	JobData() = default;
