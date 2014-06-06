@@ -15,6 +15,7 @@ cyvasse_server_SOURCES = \
 	src/main.cpp
 
 cyvasse_server_CPPFLAGS = \
+	-I$(top_srcdir)/cyvmath/include \
 	-I$(top_srcdir)/libb64/include \
 	-pthread
 

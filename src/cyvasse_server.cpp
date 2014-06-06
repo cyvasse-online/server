@@ -132,16 +132,24 @@ void CyvasseServer::processMessages()
 		Json::Value val;
 		switch(data.action)
 		{
-			case UNDEFINED:
+			case ACTION_UNDEFINED:
 				val["success"] = false;
 				val["error"] = "requested action is unknown";
 				break;
-			case CREATE_GAME:
+			case ACTION_CREATE_GAME:
 				val["success"] = true;
 				val["b64ID"] = int24ToB64ID(_int24Generator());
+				val["resumeToken"] = int48ToB64ID(_int48Generator());
 				break;
-			case JOIN_GAME:
-				// TODO
+			case ACTION_JOIN_GAME:
+				break;
+			case ACTION_RESUME_GAME:
+				break;
+			case ACTION_START:
+				break;
+			case ACTION_MOVE_PIECE:
+				break;
+			case ACTION_RESIGN:
 				break;
 			default:
 				assert(0);

@@ -22,68 +22,49 @@
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
 
-const char* actionTypeToStr(ActionType a)
-{
-	static const char* data[] = {
-			"undefined",
-			"create game",
-			"join game"
-		};
+ENUM_STR(ActionType, (initMap<ActionType, const char*> {
+	{ACTION_UNDEFINED, "undefined"},
+	{ACTION_CREATE_GAME, "create game"},
+	{ACTION_JOIN_GAME, "join game"},
+	{ACTION_RESUME_GAME, "resume game"},
+	{ACTION_START, "start"},
+	{ACTION_MOVE_PIECE, "move piece"},
+	{ACTION_RESIGN, "resign"}
+}))
 
-	return data[a];
-}
-
-ActionType strToActionType(const std::string& s)
-{
-	static std::map<std::string, ActionType> data = {
-			{"create game", CREATE_GAME},
-			{"join game", JOIN_GAME}
-		};
-
-	auto it = data.find(s);
-	if(it == data.end())
-		return UNDEFINED;
-
-	return it->second;
-}
-
-const char* ruleSetToStr(JobData::CreateGameData::RuleSet r)
-{
-	static const char* data[] = {
-			"undefined",
-			"mikelepage",
-		};
-
-	return data[r];
-}
-
-JobData::CreateGameData::RuleSet strToRuleSet(const std::string& s)
-{
-	static std::map<std::string, JobData::CreateGameData::RuleSet> data = {
-			{"mikelepage", JobData::CreateGameData::MIKELEPAGE}
-		};
-
-	auto it = data.find(s);
-	if(it == data.end())
-		return JobData::CreateGameData::UNDEFINED;
-
-	return it->second;
-}
+ENUM_STR(RuleSet, (initMap<RuleSet, const char*> {
+	{RULESET_UNDEFINED, "undefined"},
+	{RULESET_MIKELEPAGE, "mikelepage"}
+}))
 
 std::string JobData::serialize()
 {
 	Json::Value data;
 
-	data["action"] = actionTypeToStr(action);
+	data["action"] = ActionTypeToStr(action);
 
-	switch(action)
+	if(action != ACTION_UNDEFINED)
 	{
-		case CREATE_GAME:
-			data["param"]["ruleSet"] = ruleSetToStr(createGame.ruleSet);
-			break;
-		case JOIN_GAME:
-			data["param"]["b64ID"] = joinGame.b64ID;
-			break;
+		Json::Value& param = data["param"];
+
+		switch(action)
+		{
+			case ACTION_CREATE_GAME:
+				param["ruleSet"] = RuleSetToStr(createGame.ruleSet);
+				param["color"] = PlayersColorToStr(createGame.color);
+				break;
+			case ACTION_JOIN_GAME:
+				param["b64ID"] = joinGame.b64ID;
+				break;
+			case ACTION_RESUME_GAME:
+				break;
+			case ACTION_START:
+				break;
+			case ACTION_MOVE_PIECE:
+				break;
+			case ACTION_RESIGN:
+				break;
+		}
 	}
 
 	return Json::FastWriter().write(data);
@@ -103,17 +84,17 @@ void JobData::deserialize(const std::string& json)
 		return;
 	}
 
-	action = strToActionType(data.get("action", "undefined").asString());
+	action = StrToActionType(data.get("action", "undefined").asString());
 
 	if(!data.isMember("param"))
-		action = UNDEFINED;
+		action = ACTION_UNDEFINED;
 
 	switch(action)
 	{
-		case CREATE_GAME:
-			createGame.ruleSet = strToRuleSet(data["param"].get("ruleSet", "undefined").asString());
+		case ACTION_CREATE_GAME:
+			createGame.ruleSet = StrToRuleSet(data["param"].get("ruleSet", "undefined").asString());
 			break;
-		case JOIN_GAME:
+		case ACTION_JOIN_GAME:
 			{
 				std::string tmp = data["param"].get("b64ID", "").asString();
 				if(tmp.length() == 10)
@@ -121,6 +102,14 @@ void JobData::deserialize(const std::string& json)
 				else
 					joinGame.b64ID[0] = '\0';
 			}
+			break;
+		case ACTION_RESUME_GAME:
+			break;
+		case ACTION_START:
+			break;
+		case ACTION_MOVE_PIECE:
+			break;
+		case ACTION_RESIGN:
 			break;
 	}
 }
