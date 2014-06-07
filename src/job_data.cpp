@@ -51,12 +51,13 @@ std::string JobData::serialize()
 		{
 			case ACTION_CREATE_GAME:
 				param["ruleSet"] = RuleSetToStr(createGame.ruleSet);
-				param["color"] = PlayersColorToStr(createGame.color);
+				param["color"]  = PlayersColorToStr(createGame.color);
 				break;
 			case ACTION_JOIN_GAME:
-				param["b64ID"] = joinGame.b64ID;
+				param["matchID"] = joinGame.matchID;
 				break;
 			case ACTION_RESUME_GAME:
+				param["playerID"] = resumeGame.playerID;
 				break;
 			case ACTION_START:
 				break;
@@ -81,29 +82,50 @@ void JobData::deserialize(const std::string& json)
 		// TODO: check jsoncpp version through autoconf somehow
 		std::cerr << "JobData::deserialize() failed:\n"
 		          << reader.getFormatedErrorMessages();
+		error = "parsing the json failed";
 		return;
 	}
 
 	action = StrToActionType(data.get("action", "undefined").asString());
 
-	if(!data.isMember("param"))
-		action = ACTION_UNDEFINED;
+	if(action == ACTION_UNDEFINED)
+	{
+		error = "the requested action is unknown";
+		return;
+	}
+
+	const Json::Value& param = data["param"];
+
+	if(!param.isObject())
+	{
+		error = "param missing or not an object";
+		return;
+	}
 
 	switch(action)
 	{
 		case ACTION_CREATE_GAME:
-			createGame.ruleSet = StrToRuleSet(data["param"].get("ruleSet", "undefined").asString());
+			// TODO: error checking
+			createGame.ruleSet = StrToRuleSet(param.get("ruleSet", "undefined").asString());
+			createGame.color   = StrToPlayersColor(param["color"].asString());
 			break;
 		case ACTION_JOIN_GAME:
 			{
-				std::string tmp = data["param"].get("b64ID", "").asString();
-				if(tmp.length() == 10)
-					strcpy(joinGame.b64ID, tmp.c_str());
+				std::string tmp = param["matchID"].asString();
+				if(tmp.length() == 4)
+					strcpy(joinGame.matchID, tmp.c_str());
 				else
-					joinGame.b64ID[0] = '\0';
+					joinGame.matchID[0] = '\0';
 			}
 			break;
 		case ACTION_RESUME_GAME:
+			{
+				std::string tmp = param["playerID"].asString();
+				if(tmp.length() == 8)
+					strcpy(resumeGame.playerID, tmp.c_str());
+				else
+					resumeGame.playerID[0] = '\0';
+			}
 			break;
 		case ACTION_START:
 			break;

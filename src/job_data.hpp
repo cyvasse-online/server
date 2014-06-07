@@ -53,12 +53,12 @@ struct JobData
 
 	struct JoinGameData
 	{
-		char b64ID[5];
+		char matchID[5];
 	};
 
 	struct ResumeGameData
 	{
-		char resumeToken[9];
+		char playerID[9];
 	};
 
 	struct StartData
@@ -72,6 +72,7 @@ struct JobData
 	};
 
 	ActionType action;
+	std::string error;
 	union
 	{
 		CreateGameData createGame;

@@ -130,30 +130,34 @@ void CyvasseServer::processMessages()
 		JobData data(job->second->get_payload());
 
 		Json::Value val;
-		switch(data.action)
+		if(!data.error.empty())
 		{
-			case ACTION_UNDEFINED:
-				val["success"] = false;
-				val["error"] = "requested action is unknown";
-				break;
-			case ACTION_CREATE_GAME:
-				val["success"] = true;
-				val["b64ID"] = int24ToB64ID(_int24Generator());
-				val["resumeToken"] = int48ToB64ID(_int48Generator());
-				break;
-			case ACTION_JOIN_GAME:
-				break;
-			case ACTION_RESUME_GAME:
-				break;
-			case ACTION_START:
-				break;
-			case ACTION_MOVE_PIECE:
-				break;
-			case ACTION_RESIGN:
-				break;
-			default:
-				assert(0);
-				break;
+			val["success"] = false;
+			val["error"]   = data.error;
+		}
+		else
+		{
+			switch(data.action)
+			{
+				case ACTION_CREATE_GAME:
+					val["success"]  = true;
+					val["matchID"]  = int24ToB64ID(_int24Generator());
+					val["playerID"] = int48ToB64ID(_int48Generator());
+					break;
+				case ACTION_JOIN_GAME:
+					break;
+				case ACTION_RESUME_GAME:
+					break;
+				case ACTION_START:
+					break;
+				case ACTION_MOVE_PIECE:
+					break;
+				case ACTION_RESIGN:
+					break;
+				default:
+					assert(0);
+					break;
+			}
 		}
 		_server.send(job->first, Json::FastWriter().write(val), websocketpp::frame::opcode::text);
 	}
