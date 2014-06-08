@@ -22,7 +22,7 @@
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
 
-ENUM_STR(ActionType, (initMap<ActionType, const char*> {
+ENUM_STR(ActionType, (initMap<ActionType, std::string> {
 	{ACTION_UNDEFINED, "undefined"},
 	{ACTION_CREATE_GAME, "create game"},
 	{ACTION_JOIN_GAME, "join game"},
@@ -32,7 +32,7 @@ ENUM_STR(ActionType, (initMap<ActionType, const char*> {
 	{ACTION_RESIGN, "resign"}
 }))
 
-ENUM_STR(RuleSet, (initMap<RuleSet, const char*> {
+ENUM_STR(RuleSet, (initMap<RuleSet, std::string> {
 	{RULESET_UNDEFINED, "undefined"},
 	{RULESET_MIKELEPAGE, "mikelepage"}
 }))
