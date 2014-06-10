@@ -19,6 +19,7 @@
 
 #include <string>
 #include <cyvmath/common.hpp>
+#include <cyvmath/rule_sets.hpp>
 
 using namespace cyvmath;
 
@@ -34,14 +35,6 @@ enum ActionType
 };
 
 ENUM_STR_PROT(ActionType)
-
-enum RuleSet
-{
-	RULESET_UNDEFINED,
-	RULESET_MIKELEPAGE
-};
-
-ENUM_STR_PROT(RuleSet)
 
 struct JobData
 {

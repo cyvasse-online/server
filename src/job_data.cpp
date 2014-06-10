@@ -32,11 +32,6 @@ ENUM_STR(ActionType, (initMap<ActionType, std::string> {
 	{ACTION_RESIGN, "resign"}
 }))
 
-ENUM_STR(RuleSet, (initMap<RuleSet, std::string> {
-	{RULESET_UNDEFINED, "undefined"},
-	{RULESET_MIKELEPAGE, "mikelepage"}
-}))
-
 std::string JobData::serialize()
 {
 	Json::Value data;
