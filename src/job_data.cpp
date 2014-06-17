@@ -22,6 +22,8 @@
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
 
+using namespace cyvmath;
+
 ENUM_STR(ActionType, (initMap<ActionType, std::string> {
 	{ACTION_UNDEFINED, "undefined"},
 	{ACTION_CREATE_GAME, "create game"},

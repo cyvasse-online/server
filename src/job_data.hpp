@@ -18,10 +18,9 @@
 #define _JOB_DATA_HPP_
 
 #include <string>
-#include <cyvmath/common.hpp>
+#include <cyvmath/enum_str.hpp>
+#include <cyvmath/players_color.hpp>
 #include <cyvmath/rule_sets.hpp>
-
-using namespace cyvmath;
 
 enum ActionType
 {
@@ -40,8 +39,8 @@ struct JobData
 {
 	struct CreateGameData
 	{
-		RuleSet ruleSet;
-		PlayersColor color;
+		cyvmath::RuleSet ruleSet;
+		cyvmath::PlayersColor color;
 	};
 
 	struct JoinGameData

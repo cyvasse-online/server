@@ -12,7 +12,16 @@ cyvasse_server_SOURCES = \
 	src/cyvasse_server.hpp \
 	src/job_data.cpp \
 	src/job_data.hpp \
-	src/main.cpp
+	src/main.cpp \
+	src/db_config.hpp \
+	src/db/match.cpp \
+	src/db/match.hpp \
+	src/db/match_manager.cpp \
+	src/db/match_manager.hpp \
+	src/db/player.cpp \
+	src/db/player.hpp \
+	src/db/player_manager.cpp \
+	src/db/player_manager.hpp
 
 cyvasse_server_CPPFLAGS = \
 	-I$(top_srcdir)/cyvmath/include \
@@ -25,4 +34,6 @@ cyvasse_server_LDFLAGS = \
 cyvasse_server_LDADD = \
 	$(top_builddir)/libb64/src/libb64.a \
 	-lboost_system \
-	-ljsoncpp
+	-lcxxtools \
+	-ljsoncpp \
+	-ltntdb
