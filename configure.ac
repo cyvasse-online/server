@@ -9,6 +9,6 @@ AC_CHECK_HEADER([jsoncpp/json/json.h], [], AC_MSG_ERROR([jsoncpp headers not fou
 AC_CHECK_HEADER([tntdb/connection.h], [], AC_MSG_ERROR([tntdb headers not found]))
 AC_CHECK_HEADER([websocketpp/version.hpp], [], AC_MSG_ERROR([websocket++ headers not found]))
 
-AC_CONFIG_SUBDIRS([libb64])
+AC_CONFIG_SUBDIRS([cyvmath libb64])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

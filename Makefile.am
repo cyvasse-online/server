@@ -1,9 +1,6 @@
-SUBDIRS = libb64
+SUBDIRS = cyvmath libb64 .
 
 AUTOMAKE_OPTIONS = subdir-objects
-
-AM_CXXFLAGS = \
-	-std=c++11
 
 bin_PROGRAMS = cyvasse-server
 
@@ -28,10 +25,14 @@ cyvasse_server_CPPFLAGS = \
 	-I$(top_srcdir)/libb64/include \
 	-pthread
 
+cyvasse_server_CXXFLAGS = \
+	-std=c++11
+
 cyvasse_server_LDFLAGS = \
 	-pthread
 
 cyvasse_server_LDADD = \
+	$(top_builddir)/cyvmath/libcyvmath.a \
 	$(top_builddir)/libb64/src/libb64.a \
 	-lboost_system \
 	-lcxxtools \

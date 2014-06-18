@@ -16,20 +16,20 @@
 
 #include "cyvasse_server.hpp"
 
-// for libb64, default value
-#define BUFFERSIZE 16777216
-
 #include <chrono>
+
+// default value
+#define BUFFERSIZE 16777216
 #include <b64/encode.h>
 #include <b64/decode.h>
+#undef BUFFERSIZE
+
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
 #include "job_data.hpp"
 
 // this function starts with _ because it's not universally usable
 // (it ignores the last 1/4 of bytes of the parameter value)
-// I wonder if this function relies on the
-// endianness of the executing machine o.O
 template <typename IntType>
 std::string _intToB64ID(IntType intVal)
 {
@@ -56,9 +56,11 @@ std::string _intToB64ID(IntType intVal)
 #define int48ToB64ID(x) \
 	_intToB64ID<uint64_t>(x)
 
+using std::chrono::system_clock;
+
 CyvasseServer::CyvasseServer()
-	: _int24Generator(std::chrono::system_clock::now().time_since_epoch().count())
-	, _int48Generator(std::chrono::system_clock::now().time_since_epoch().count())
+	: _int24Generator(system_clock::now().time_since_epoch().count())
+	, _int48Generator(system_clock::now().time_since_epoch().count())
 {
 	using std::placeholders::_1;
 	using std::placeholders::_2;
@@ -101,7 +103,7 @@ void CyvasseServer::run(uint16_t port, unsigned nWorkerThreads)
 void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, server::message_ptr msg)
 {
 	// Queue message up for sending by processing thread
-	std::unique_lock<std::mutex> lock(_jobLock);
+	std::unique_lock<std::mutex> lock(_jobMtx);
 
 	_jobQueue.emplace(new Job(hdl, msg));
 
@@ -113,7 +115,7 @@ void CyvasseServer::processMessages()
 {
 	while(true)
 	{
-		std::unique_lock<std::mutex> lock(_jobLock);
+		std::unique_lock<std::mutex> lock(_jobMtx);
 
 		while(_running && _jobQueue.empty())
 			_jobCond.wait(lock);
@@ -129,26 +131,79 @@ void CyvasseServer::processMessages()
 		/* Process job */
 		JobData data(job->second->get_payload());
 
-		Json::Value val;
+		Json::Value retVal;
+		auto setError = [&](std::string error) {
+				retVal["success"] = false;
+				retVal["error"] = error;
+			};
+
 		if(!data.error.empty())
 		{
-			val["success"] = false;
-			val["error"]   = data.error;
+			setError(data.error);
 		}
 		else
 		{
+			std::unique_lock<std::mutex> lock(_connMapMtx);
 			switch(data.action)
 			{
 				case ACTION_CREATE_GAME:
-					val["success"]  = true;
-					val["matchID"]  = int24ToB64ID(_int24Generator());
-					val["playerID"] = int48ToB64ID(_int48Generator());
+				{
+					auto it = _connectionMatches.find(job->first);
+					if(it != _connectionMatches.end())
+					{
+						setError("this connection is already in use for a running match");
+						break;
+					}
+
+					std::string matchID(int24ToB64ID(_int24Generator()));
+
+					auto tmp1 = _connectionMatches.emplace(job->first, matchID);
+					auto tmp2 = _matchConnections.emplace(matchID, std::vector<websocketpp::connection_hdl>());
+
+					// both emplacements must be successful when the previous `break` wasn't run
+					assert(tmp1.second);
+					assert(tmp2.second);
+
+					// Add the connection handle of the job to the new _matchConnections entries vector
+					tmp2.first->second.push_back(job->first);
+
+					std::string playerID(int48ToB64ID(_int48Generator()));
+
+					retVal["success"]  = true;
+					retVal["matchID"]  = matchID;
+					retVal["playerID"] = playerID;
 					break;
+				}
 				case ACTION_JOIN_GAME:
+				{
+					auto it1 = _connectionMatches.find(job->first);
+					if(it1 != _connectionMatches.end())
+					{
+						setError("this connection is already in use for a running match");
+						break;
+					}
+
+					auto it2 = _matchConnections.find(data.joinGame.matchID);
+					if(it2 == _matchConnections.end())
+					{
+						setError("game not found");
+						break;
+					}
+
+					auto tmp = _connectionMatches.emplace(job->first, data.joinGame.matchID);
+					assert(tmp.second);
+
+					it2->second.push_back(job->first);
+
+					std::string playerID(int48ToB64ID(_int48Generator()));
+
+					retVal["success"]  = true;
+					retVal["playerID"] = playerID;
 					break;
+				}
 				case ACTION_RESUME_GAME:
 					break;
-				case ACTION_START:
+				/*case ACTION_START:
 					break;
 				case ACTION_MOVE_PIECE:
 					break;
@@ -156,9 +211,34 @@ void CyvasseServer::processMessages()
 					break;
 				default:
 					assert(0);
+					break;*/
+				default:
+				{
+					auto it1 = _connectionMatches.find(job->first);
+					if(it1 == _connectionMatches.end())
+					{
+						setError("could not find the match this message belongs to");
+						break;
+					}
+
+					auto it2 = _matchConnections.find(it1->second);
+					if(it2 == _matchConnections.end())
+					{
+						setError("game this message belongs to not found");
+						break;
+					}
+
+					for(websocketpp::connection_hdl hdl : it2->second)
+					{
+						//if(hdl != job->first)
+							_server.send(hdl, job->second);
+					}
+
+					retVal["success"] = true;
 					break;
+				}
 			}
 		}
-		_server.send(job->first, Json::FastWriter().write(val), websocketpp::frame::opcode::text);
+		_server.send(job->first, Json::FastWriter().write(retVal), websocketpp::frame::opcode::text);
 	}
 }

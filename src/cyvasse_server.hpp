@@ -17,10 +17,7 @@
 #ifndef _CYVASSE_SERVER_HPP_
 #define _CYVASSE_SERVER_HPP_
 
-#define _WEBSOCKETPP_CPP11_STL_
-
 #include <atomic>
-#include <iostream>
 #include <condition_variable>
 #include <map>
 #include <memory>
@@ -28,24 +25,34 @@
 #include <random>
 #include <set>
 #include <thread>
+#include <utility>
+
+#define _WEBSOCKETPP_CPP11_STL_
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
+#undef _WEBSOCKETPP_CPP11_STL_
 
 class CyvasseServer
 {
 	private:
 		typedef websocketpp::server<websocketpp::config::asio> server;
-		typedef std::map<websocketpp::connection_hdl, unsigned long, std::owner_less<websocketpp::connection_hdl>> ConList;
+
+		typedef std::map<websocketpp::connection_hdl, std::string, std::owner_less<websocketpp::connection_hdl>> ConToMatchMap;
+		typedef std::map<std::string, std::vector<websocketpp::connection_hdl>> MatchToConMap;
+
 		typedef std::pair<websocketpp::connection_hdl, server::message_ptr> Job;
 		typedef std::queue<std::unique_ptr<Job>> JobQueue;
 
 		server _server;
-		ConList _connections;
+
+		ConToMatchMap _connectionMatches;
+		MatchToConMap _matchConnections;
+
 		JobQueue _jobQueue;
 		std::set<std::unique_ptr<std::thread>> _workerThreads;
 
-		std::mutex _jobLock;
-		std::mutex _connectionLock;
+		std::mutex _jobMtx;
+		std::mutex _connMapMtx;
 		std::condition_variable _jobCond;
 
 		std::atomic<bool> _running;
