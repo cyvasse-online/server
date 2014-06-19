@@ -132,6 +132,8 @@ void CyvasseServer::processMessages()
 		JobData data(job->second->get_payload());
 
 		Json::Value retVal;
+		retVal["messageType"] = "reply";
+		retVal["messageID"] = data.messageID;
 		auto setError = [&](std::string error) {
 				retVal["success"] = false;
 				retVal["error"] = error;
@@ -144,7 +146,7 @@ void CyvasseServer::processMessages()
 		else
 		{
 			std::unique_lock<std::mutex> lock(_connMapMtx);
-			switch(data.action)
+			switch(data.requestData.action)
 			{
 				case ACTION_CREATE_GAME:
 				{
@@ -170,8 +172,8 @@ void CyvasseServer::processMessages()
 					std::string playerID(int48ToB64ID(_int48Generator()));
 
 					retVal["success"]  = true;
-					retVal["matchID"]  = matchID;
-					retVal["playerID"] = playerID;
+					retVal["data"]["matchID"]  = matchID;
+					retVal["data"]["playerID"] = playerID;
 					break;
 				}
 				case ACTION_JOIN_GAME:
@@ -183,14 +185,14 @@ void CyvasseServer::processMessages()
 						break;
 					}
 
-					auto it2 = _matchConnections.find(data.joinGame.matchID);
+					auto it2 = _matchConnections.find(data.requestData.joinGame.matchID);
 					if(it2 == _matchConnections.end())
 					{
 						setError("game not found");
 						break;
 					}
 
-					auto tmp = _connectionMatches.emplace(job->first, data.joinGame.matchID);
+					auto tmp = _connectionMatches.emplace(job->first, data.requestData.joinGame.matchID);
 					assert(tmp.second);
 
 					it2->second.push_back(job->first);
@@ -198,7 +200,7 @@ void CyvasseServer::processMessages()
 					std::string playerID(int48ToB64ID(_int48Generator()));
 
 					retVal["success"]  = true;
-					retVal["playerID"] = playerID;
+					retVal["data"]["playerID"] = playerID;
 					break;
 				}
 				case ACTION_RESUME_GAME:
@@ -230,7 +232,8 @@ void CyvasseServer::processMessages()
 
 					for(websocketpp::connection_hdl hdl : it2->second)
 					{
-						//if(hdl != job->first)
+						// owner-based ==
+						if(!hdl.owner_before(job->first) && !job->first.owner_before(hdl))
 							_server.send(hdl, job->second);
 					}
 

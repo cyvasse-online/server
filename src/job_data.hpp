@@ -22,6 +22,15 @@
 #include <cyvmath/players_color.hpp>
 #include <cyvmath/rule_sets.hpp>
 
+enum MessageType
+{
+	MESSAGE_UNDEFINED,
+	MESSAGE_REQUEST,
+	MESSAGE_REPLY
+};
+
+ENUM_STR_PROT(MessageType)
+
 enum ActionType
 {
 	ACTION_UNDEFINED,
@@ -37,41 +46,59 @@ ENUM_STR_PROT(ActionType)
 
 struct JobData
 {
-	struct CreateGameData
+	struct RequestData
 	{
-		cyvmath::RuleSet ruleSet;
-		cyvmath::PlayersColor color;
+		struct CreateGameData
+		{
+			cyvmath::RuleSet ruleSet;
+			cyvmath::PlayersColor color;
+		};
+
+		struct JoinGameData
+		{
+			char matchID[5];
+		};
+
+		struct ResumeGameData
+		{
+			char playerID[9];
+		};
+
+		struct StartData
+		{
+			// piece positions
+		};
+
+		struct MovePieceData
+		{
+			// from, to
+		};
+
+		ActionType action;
+		union
+		{
+			CreateGameData createGame;
+			JoinGameData joinGame;
+			ResumeGameData resumeGame;
+			StartData start;
+			MovePieceData movePiece;
+		};
 	};
 
-	struct JoinGameData
+	struct ReplyData
 	{
-		char matchID[5];
+		bool success;
 	};
 
-	struct ResumeGameData
-	{
-		char playerID[9];
-	};
+	MessageType messageType;
+	unsigned messageID;
 
-	struct StartData
-	{
-		// piece positions
-	};
-
-	struct MovePieceData
-	{
-		// from, to
-	};
-
-	ActionType action;
 	std::string error;
+
 	union
 	{
-		CreateGameData createGame;
-		JoinGameData joinGame;
-		ResumeGameData resumeGame;
-		StartData start;
-		MovePieceData movePiece;
+		RequestData requestData;
+		ReplyData replyData;
 	};
 
 	JobData() = default;

@@ -24,6 +24,12 @@
 
 using namespace cyvmath;
 
+ENUM_STR(MessageType, (initMap<MessageType, std::string> {
+	{MESSAGE_UNDEFINED, "undefined"},
+	{MESSAGE_REQUEST, "request"},
+	{MESSAGE_REPLY, "reply"}
+}))
+
 ENUM_STR(ActionType, (initMap<ActionType, std::string> {
 	{ACTION_UNDEFINED, "undefined"},
 	{ACTION_CREATE_GAME, "create game"},
@@ -38,23 +44,25 @@ std::string JobData::serialize()
 {
 	Json::Value data;
 
-	data["action"] = ActionTypeToStr(action);
+	data["messageType"] = MessageTypeToStr(messageType);
+	data["messageID"] = messageID;
+	data["action"] = ActionTypeToStr(requestData.action);
 
-	if(action != ACTION_UNDEFINED)
+	if(requestData.action != ACTION_UNDEFINED)
 	{
 		Json::Value& param = data["param"];
 
-		switch(action)
+		switch(requestData.action)
 		{
 			case ACTION_CREATE_GAME:
-				param["ruleSet"] = RuleSetToStr(createGame.ruleSet);
-				param["color"]  = PlayersColorToStr(createGame.color);
+				param["ruleSet"] = RuleSetToStr(requestData.createGame.ruleSet);
+				param["color"]  = PlayersColorToStr(requestData.createGame.color);
 				break;
 			case ACTION_JOIN_GAME:
-				param["matchID"] = joinGame.matchID;
+				param["matchID"] = requestData.joinGame.matchID;
 				break;
 			case ACTION_RESUME_GAME:
-				param["playerID"] = resumeGame.playerID;
+				param["playerID"] = requestData.resumeGame.playerID;
 				break;
 			case ACTION_START:
 				break;
@@ -83,9 +91,12 @@ void JobData::deserialize(const std::string& json)
 		return;
 	}
 
-	action = StrToActionType(data.get("action", "undefined").asString());
+	messageType = StrToMessageType(data.get("messageType", "undefined").asString());
+	messageID = data.get("messageID", 0).asUInt();
 
-	if(action == ACTION_UNDEFINED)
+	requestData.action = StrToActionType(data.get("action", "undefined").asString());
+
+	if(requestData.action == ACTION_UNDEFINED)
 	{
 		error = "the requested action is unknown";
 		return;
@@ -99,29 +110,29 @@ void JobData::deserialize(const std::string& json)
 		return;
 	}
 
-	switch(action)
+	switch(requestData.action)
 	{
 		case ACTION_CREATE_GAME:
 			// TODO: error checking
-			createGame.ruleSet = StrToRuleSet(param.get("ruleSet", "undefined").asString());
-			createGame.color   = StrToPlayersColor(param["color"].asString());
+			requestData.createGame.ruleSet = StrToRuleSet(param.get("ruleSet", "undefined").asString());
+			requestData.createGame.color   = StrToPlayersColor(param["color"].asString());
 			break;
 		case ACTION_JOIN_GAME:
 			{
 				std::string tmp = param["matchID"].asString();
 				if(tmp.length() == 4)
-					strcpy(joinGame.matchID, tmp.c_str());
+					strcpy(requestData.joinGame.matchID, tmp.c_str());
 				else
-					joinGame.matchID[0] = '\0';
+					requestData.joinGame.matchID[0] = '\0';
 			}
 			break;
 		case ACTION_RESUME_GAME:
 			{
 				std::string tmp = param["playerID"].asString();
 				if(tmp.length() == 8)
-					strcpy(resumeGame.playerID, tmp.c_str());
+					strcpy(requestData.resumeGame.playerID, tmp.c_str());
 				else
-					resumeGame.playerID[0] = '\0';
+					requestData.resumeGame.playerID[0] = '\0';
 			}
 			break;
 		case ACTION_START:
