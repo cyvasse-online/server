@@ -24,7 +24,6 @@
 #include <mutex>
 #include <random>
 #include <set>
-#include <thread>
 #include <utility>
 
 #define _WEBSOCKETPP_CPP11_STL_

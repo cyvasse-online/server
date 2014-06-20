@@ -18,6 +18,7 @@
 #define _JOB_HANDLER_HPP_
 
 #include <string>
+#include <thread>
 #include "job_data.hpp"
 
 class CyvasseServer;
@@ -27,10 +28,11 @@ struct JobHandler
 	private:
 		CyvasseServer& _server;
 
+		std::thread _thread;
+
 	public:
-		JobHandler(CyvasseServer& server)
-			: _server(server)
-		{ }
+		JobHandler(CyvasseServer&);
+		~JobHandler();
 
 		// JobHandler main loop
 		void processMessages();

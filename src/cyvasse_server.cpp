@@ -22,13 +22,12 @@
 using std::chrono::system_clock;
 
 CyvasseServer::CyvasseServer()
-	: _int24Generator(system_clock::now().time_since_epoch().count())
+	: _running(true)
+	, _int24Generator(system_clock::now().time_since_epoch().count())
 	, _int48Generator(system_clock::now().time_since_epoch().count())
 {
 	using std::placeholders::_1;
 	using std::placeholders::_2;
-
-	_running = true;
 
 	// Initialize Asio Transport
 	_wsServer.init_asio();

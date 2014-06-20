@@ -22,6 +22,16 @@
 #include "b64.hpp"
 #include "cyvasse_server.hpp"
 
+JobHandler::JobHandler(CyvasseServer& server)
+	: _server(server)
+	, _thread(std::bind(&JobHandler::processMessages, this))
+{ }
+
+JobHandler::~JobHandler()
+{
+	_thread.join();
+}
+
 void JobHandler::processMessages()
 {
 	typedef CyvasseServer::Job Job;
