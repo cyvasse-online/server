@@ -32,27 +32,31 @@
 #include <websocketpp/server.hpp>
 #undef _WEBSOCKETPP_CPP11_STL_
 
+#include "job_handler.hpp"
+
 class CyvasseServer
 {
+	friend JobHandler;
+
 	private:
-		typedef websocketpp::server<websocketpp::config::asio> server;
+		typedef websocketpp::server<websocketpp::config::asio> WSServer;
 
 		typedef std::map<websocketpp::connection_hdl, std::string, std::owner_less<websocketpp::connection_hdl>> ConToMatchMap;
 		typedef std::map<std::string, std::vector<websocketpp::connection_hdl>> MatchToConMap;
 
-		typedef std::pair<websocketpp::connection_hdl, server::message_ptr> Job;
+		typedef std::pair<websocketpp::connection_hdl, WSServer::message_ptr> Job;
 		typedef std::queue<std::unique_ptr<Job>> JobQueue;
 
-		server _server;
+		WSServer _wsServer;
 
 		ConToMatchMap _connectionMatches;
 		MatchToConMap _matchConnections;
 
-		JobQueue _jobQueue;
-		std::set<std::unique_ptr<std::thread>> _workerThreads;
-
-		std::mutex _jobMtx;
 		std::mutex _connMapMtx;
+
+		JobQueue _jobQueue;
+		std::set<std::unique_ptr<JobHandler>> _workers;
+		std::mutex _jobMtx;
 		std::condition_variable _jobCond;
 
 		std::atomic<bool> _running;
@@ -64,9 +68,10 @@ class CyvasseServer
 		CyvasseServer();
 		~CyvasseServer();
 
-		void run(uint16_t port, unsigned nWorkerThreads);
-		void onMessage(websocketpp::connection_hdl hdl, server::message_ptr msg);
-		void processMessages();
+		void run(uint16_t port, unsigned nWorkers);
+		void stop();
+
+		void onMessage(websocketpp::connection_hdl hdl, WSServer::message_ptr msg);
 };
 
 #endif // _CYVASSE_SERVER_HPP_
