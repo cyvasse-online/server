@@ -14,6 +14,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <exception>
 #include <iostream>
 #include <csignal>
 #include "cyvasse_server.hpp"

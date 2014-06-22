@@ -17,8 +17,11 @@
 #ifndef _JOB_DATA_HPP_
 #define _JOB_DATA_HPP_
 
+#include <stdexcept>
 #include <string>
+#include <cyvmath/coordinate.hpp>
 #include <cyvmath/enum_str.hpp>
+#include <cyvmath/piece.hpp>
 #include <cyvmath/players_color.hpp>
 #include <cyvmath/rule_sets.hpp>
 
@@ -56,52 +59,58 @@ struct JobData
 
 		struct JoinGameData
 		{
-			char matchID[5];
+			std::string matchID;
 		};
 
 		struct ResumeGameData
 		{
-			char playerID[9];
+			std::string playerID;
 		};
 
 		struct StartData
 		{
-			// piece positions
+			// TODO: make this a dynamic list when the union is replaced
+			// has to be done at latest when an additional rule set is added
+			std::pair<cyvmath::CoordinateDcUqP, cyvmath::PieceType> positions;
 		};
 
 		struct MovePieceData
 		{
-			// from, to
+			cyvmath::CoordinateDcUqP startPos;
+			cyvmath::CoordinateDcUqP targetPos;
+			// debugging hint
+			cyvmath::PieceType pieceType;
 		};
 
 		ActionType action;
-		union
-		{
+		// Without this being a union, this struct is (relatively seen)
+		// much bigger. This problem will be fixed soon though.
+		//union
+		//{
 			CreateGameData createGame;
 			JoinGameData joinGame;
 			ResumeGameData resumeGame;
 			StartData start;
 			MovePieceData movePiece;
-		};
+		//};
 	};
 
 	struct ReplyData
 	{
 		bool success;
+		std::string error;
 	};
 
 	MessageType messageType;
 	unsigned messageID;
 
-	std::string error;
-
-	union
-	{
+	//union
+	//{
 		RequestData requestData;
 		ReplyData replyData;
-	};
+	//};
 
-	JobData() = default;
+	JobData();
 	JobData(const std::string& json)
 	{
 		deserialize(json);
@@ -109,6 +118,17 @@ struct JobData
 
 	std::string serialize();
 	void deserialize(const std::string& json);
+};
+
+class JobDataParseError : public std::runtime_error
+{
+	public:
+		explicit JobDataParseError(const std::string& what_arg)
+			: std::runtime_error(what_arg)
+		{ }
+		explicit JobDataParseError(const char* what_arg)
+			: std::runtime_error(what_arg)
+		{ }
 };
 
 #endif // _JOB_DATA_HPP_

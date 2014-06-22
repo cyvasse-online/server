@@ -59,7 +59,25 @@ void JobHandler::processMessages()
 		lock.unlock();
 
 		// Process job
-		JobData data(job->second->get_payload());
+		JobData data;
+		try
+		{
+			data.deserialize(job->second->get_payload());
+		}
+		catch(JobDataParseError& e)
+		{
+			switch(data.messageType)
+			{
+				case MESSAGE_REQUEST:
+					// reply with an error message
+					break;
+				case MESSAGE_REPLY:
+					// send an error message to the other player
+					break;
+				// default: do nothing
+			}
+			return;
+		}
 
 		std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherPlayers;
 
@@ -81,22 +99,21 @@ void JobHandler::processMessages()
 			}
 		}
 
-		if(data.messageType == MESSAGE_REQUEST)
+		switch(data.messageType)
 		{
-			// reply object is created for every request but is discarded if action
-			// is not {create, join, resume} game and it doesn't contain any error
-			Json::Value reply;
-			reply["messageType"] = "reply";
-			reply["messageID"] = data.messageID;
-
-			auto setError = [&](std::string error) {
-					reply["success"] = false;
-					reply["error"] = error;
-				};
-
-			if(!data.error.empty()) setError(data.error);
-			else
+			case MESSAGE_REQUEST:
 			{
+				// reply object is created for every request but is discarded if action
+				// is not {create, join, resume} game and it doesn't contain any error
+				Json::Value reply;
+				reply["messageType"] = "reply";
+				reply["messageID"] = data.messageID;
+
+				auto setError = [&](std::string error) {
+						reply["success"] = false;
+						reply["error"] = error;
+					};
+
 				std::unique_lock<std::mutex> lock(_server._connMapMtx);
 				switch(data.requestData.action)
 				{
@@ -179,15 +196,23 @@ void JobHandler::processMessages()
 						break;
 					}
 				}
+				server.send(job->first, jsonWriter.write(reply), opcode::text);
+				break;
 			}
-			server.send(job->first, jsonWriter.write(reply), opcode::text);
-		}
-		else if(data.messageType == MESSAGE_REPLY)
-		{
-			if(data.replyData.success)
+			case MESSAGE_REPLY:
 			{
-				server.send(job->first, jsonWriter.write(data.serialize()), opcode::text);
+				if(data.replyData.success)
+				{
+					server.send(job->first, jsonWriter.write(data.serialize()), opcode::text);
+				}
+				else
+				{
+					data.replyData.error = data.replyData.error.empty() ?
+						"The opponents client sent an error message without any detail" :
+						"The opponents client sent the following error message: " + data.replyData.error;
+				}
 			}
+			default: assert(0);
 		}
 	}
 }

@@ -17,7 +17,6 @@
 #include "job_data.hpp"
 
 #include <map>
-#include <cstring>
 #include <jsoncpp/json/reader.h>
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/writer.h>
@@ -39,6 +38,13 @@ ENUM_STR(ActionType, (initMap<ActionType, std::string> {
 	{ACTION_MOVE_PIECE, "move piece"},
 	{ACTION_RESIGN, "resign"}
 }))
+
+// [TODO]
+JobData::JobData()
+{
+	requestData.createGame.ruleSet = RULESET_UNDEFINED;
+	requestData.createGame.color = PLAYER_UNDEFINED;
+}
 
 std::string JobData::serialize()
 {
@@ -87,59 +93,64 @@ void JobData::deserialize(const std::string& json)
 		// TODO: check jsoncpp version through autoconf somehow
 		std::cerr << "JobData::deserialize() failed:\n"
 		          << reader.getFormatedErrorMessages();
-		error = "parsing the json failed";
-		return;
+		throw JobDataParseError("JSON parsing failed");
 	}
 
 	messageType = StrToMessageType(data.get("messageType", "undefined").asString());
 	messageID = data.get("messageID", 0).asUInt();
 
-	requestData.action = StrToActionType(data.get("action", "undefined").asString());
-
-	if(requestData.action == ACTION_UNDEFINED)
+	if(messageType == MESSAGE_REQUEST)
 	{
-		error = "the requested action is unknown";
-		return;
+		requestData.action = StrToActionType(data.get("action", "undefined").asString());
+
+		if(requestData.action == ACTION_UNDEFINED)
+			throw JobDataParseError("Unknown action");
+
+		const Json::Value& param = data["param"];
+
+		if(!param.isObject())
+			throw JobDataParseError("Member param missing or not an object");
+
+		switch(requestData.action)
+		{
+			case ACTION_CREATE_GAME:
+				// TODO: error checking
+				requestData.createGame.ruleSet = StrToRuleSet(param.get("ruleSet", "undefined").asString());
+				requestData.createGame.color   = StrToPlayersColor(param["color"].asString());
+				break;
+			case ACTION_JOIN_GAME:
+				{
+					std::string tmp = param["matchID"].asString();
+					if(tmp.length() == 4)
+						requestData.joinGame.matchID = tmp;
+					else
+						requestData.joinGame.matchID[0] = '\0';
+				}
+				break;
+			case ACTION_RESUME_GAME:
+				{
+					std::string tmp = param["playerID"].asString();
+					if(tmp.length() == 8)
+						requestData.resumeGame.playerID = tmp;
+					else
+						requestData.resumeGame.playerID[0] = '\0';
+				}
+				break;
+			case ACTION_START:
+				break;
+			case ACTION_MOVE_PIECE:
+				break;
+			case ACTION_RESIGN:
+				break;
+		}
 	}
-
-	const Json::Value& param = data["param"];
-
-	if(!param.isObject())
+	else if(messageType == MESSAGE_REPLY)
 	{
-		error = "param missing or not an object";
-		return;
+		replyData.success = data.get("success", false).asBool();
+		replyData.error = data.get("error", "").asString();
 	}
-
-	switch(requestData.action)
+	else
 	{
-		case ACTION_CREATE_GAME:
-			// TODO: error checking
-			requestData.createGame.ruleSet = StrToRuleSet(param.get("ruleSet", "undefined").asString());
-			requestData.createGame.color   = StrToPlayersColor(param["color"].asString());
-			break;
-		case ACTION_JOIN_GAME:
-			{
-				std::string tmp = param["matchID"].asString();
-				if(tmp.length() == 4)
-					strcpy(requestData.joinGame.matchID, tmp.c_str());
-				else
-					requestData.joinGame.matchID[0] = '\0';
-			}
-			break;
-		case ACTION_RESUME_GAME:
-			{
-				std::string tmp = param["playerID"].asString();
-				if(tmp.length() == 8)
-					strcpy(requestData.resumeGame.playerID, tmp.c_str());
-				else
-					requestData.resumeGame.playerID[0] = '\0';
-			}
-			break;
-		case ACTION_START:
-			break;
-		case ACTION_MOVE_PIECE:
-			break;
-		case ACTION_RESIGN:
-			break;
+		throw JobDataParseError("Unknown message type");
 	}
 }
