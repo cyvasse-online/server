@@ -19,7 +19,7 @@
 
 #include <string>
 #include <thread>
-#include "job_data.hpp"
+#include "message_data.hpp"
 
 class CyvasseServer;
 

@@ -19,11 +19,15 @@
 
 #include <stdexcept>
 #include <string>
+#include <boost/variant/get.hpp>
+#include <boost/variant/variant.hpp>
 #include <cyvmath/coordinate.hpp>
 #include <cyvmath/enum_str.hpp>
 #include <cyvmath/piece.hpp>
 #include <cyvmath/players_color.hpp>
 #include <cyvmath/rule_sets.hpp>
+
+#include <iostream>
 
 enum MessageType
 {
@@ -47,71 +51,114 @@ enum ActionType
 
 ENUM_STR_PROT(ActionType)
 
-struct JobData
+struct MessageData
 {
 	struct RequestData
 	{
-		struct CreateGameData
+		struct CreateGameParam
 		{
 			cyvmath::RuleSet ruleSet;
 			cyvmath::PlayersColor color;
+
+			CreateGameParam()
+				: ruleSet(cyvmath::RULESET_UNDEFINED)
+				, color(cyvmath::PLAYER_UNDEFINED)
+			{ }
 		};
 
-		struct JoinGameData
+		CreateGameParam& getCreateGameParam()
+		{ return boost::get<CreateGameParam>(param); }
+
+		struct JoinGameParam
 		{
 			std::string matchID;
 		};
 
-		struct ResumeGameData
+		JoinGameParam& getJoinGameParam()
+		{ return boost::get<JoinGameParam>(param); }
+
+		struct ResumeGameParam
 		{
 			std::string playerID;
 		};
 
-		struct StartData
+		ResumeGameParam& getResumeGameParam()
+		{ return boost::get<ResumeGameParam>(param); }
+
+		struct StartParam
 		{
 			// TODO: make this a dynamic list when the union is replaced
 			// has to be done at latest when an additional rule set is added
 			std::pair<cyvmath::CoordinateDcUqP, cyvmath::PieceType> positions;
 		};
 
-		struct MovePieceData
+		StartParam& getStartParam()
+		{ return boost::get<StartParam>(param); }
+
+		struct MovePieceParam
 		{
 			cyvmath::CoordinateDcUqP startPos;
 			cyvmath::CoordinateDcUqP targetPos;
 			// debugging hint
 			cyvmath::PieceType pieceType;
+
+			MovePieceParam()
+				: pieceType(cyvmath::PIECE_UNDEFINED)
+			{ }
 		};
 
+		MovePieceParam& getMovePieceParam()
+		{ return boost::get<MovePieceParam>(param); }
+
 		ActionType action;
-		// Without this being a union, this struct is (relatively seen)
-		// much bigger. This problem will be fixed soon though.
-		//union
-		//{
-			CreateGameData createGame;
-			JoinGameData joinGame;
-			ResumeGameData resumeGame;
-			StartData start;
-			MovePieceData movePiece;
-		//};
+		boost::variant<CreateGameParam, JoinGameParam, ResumeGameParam, StartParam, MovePieceParam> param;
+
+		RequestData()
+			: action(ACTION_UNDEFINED)
+		{ }
 	};
+
+	RequestData& getRequestData()
+	{ return boost::get<RequestData>(data); }
 
 	struct ReplyData
 	{
+		struct CreateGameParam
+		{
+			std::string matchID;
+			std::string playerID;
+		};
+
+		CreateGameParam& getCreateGameParam()
+		{ return boost::get<CreateGameParam>(param); }
+
+		struct JoinGameParam
+		{
+			cyvmath::RuleSet ruleSet;
+			std::string playerID;
+		};
+
+		JoinGameParam& getJoinGameParam()
+		{ return boost::get<JoinGameParam>(param); }
+
 		bool success;
 		std::string error;
+		boost::variant<CreateGameParam, JoinGameParam> param;
 	};
+
+	ReplyData& getReplyData()
+	{ return boost::get<ReplyData>(data); }
 
 	MessageType messageType;
 	unsigned messageID;
+	boost::variant<RequestData, ReplyData> data;
 
-	//union
-	//{
-		RequestData requestData;
-		ReplyData replyData;
-	//};
+	MessageData()
+		: messageType(MESSAGE_UNDEFINED)
+		, messageID(0)
+	{ }
 
-	JobData();
-	JobData(const std::string& json)
+	MessageData(const std::string& json)
 	{
 		deserialize(json);
 	}
@@ -120,13 +167,13 @@ struct JobData
 	void deserialize(const std::string& json);
 };
 
-class JobDataParseError : public std::runtime_error
+class MessageDataParseError : public std::runtime_error
 {
 	public:
-		explicit JobDataParseError(const std::string& what_arg)
+		explicit MessageDataParseError(const std::string& what_arg)
 			: std::runtime_error(what_arg)
 		{ }
-		explicit JobDataParseError(const char* what_arg)
+		explicit MessageDataParseError(const char* what_arg)
 			: std::runtime_error(what_arg)
 		{ }
 };

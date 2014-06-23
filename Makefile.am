@@ -8,8 +8,8 @@ cyvasse_server_SOURCES = \
 	src/b64.hpp \
 	src/cyvasse_server.cpp \
 	src/cyvasse_server.hpp \
-	src/job_data.cpp \
-	src/job_data.hpp \
+	src/message_data.cpp \
+	src/message_data.hpp \
 	src/job_handler.cpp \
 	src/job_handler.hpp \
 	src/main.cpp \
