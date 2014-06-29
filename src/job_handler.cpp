@@ -140,7 +140,7 @@ void JobHandler::processMessages()
 
 							replyData.success = true;
 
-							replyData.param = ReplyData::CreateGameParam();
+							replyData.param = MessageData::ReplyData::CreateGameParam();
 							auto& createGameReplyData = replyData.getCreateGameParam();
 							createGameReplyData.matchID  = matchID;
 							createGameReplyData.playerID = playerID;
@@ -167,7 +167,7 @@ void JobHandler::processMessages()
 
 							replyData.success = true;
 
-							replyData.param = ReplyData::JoinGameParam();
+							replyData.param = MessageData::ReplyData::JoinGameParam();
 							auto& joinGameReplyData = replyData.getJoinGameParam();
 							joinGameReplyData.playerID = playerID;
 						}
