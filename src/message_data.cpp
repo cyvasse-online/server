@@ -115,6 +115,10 @@ std::string MessageData::serialize()
 					{
 						break;
 					}
+					case ACTION_CHAT_MSG:
+					{
+						break;
+					}
 				}
 			}
 			break;

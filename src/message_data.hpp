@@ -46,7 +46,8 @@ enum ActionType
 	ACTION_RESUME_GAME,
 	ACTION_START,
 	ACTION_MOVE_PIECE,
-	ACTION_RESIGN
+	ACTION_RESIGN,
+	ACTION_CHAT_MSG
 };
 
 ENUM_STR_PROT(ActionType)
@@ -87,9 +88,7 @@ struct MessageData
 
 		struct StartParam
 		{
-			// TODO: make this a dynamic list when the union is replaced
-			// has to be done at latest when an additional rule set is added
-			std::pair<cyvmath::CoordinateDcUqP, cyvmath::PieceType> positions;
+			std::vector<std::pair<cyvmath::CoordinateDcUqP, cyvmath::PieceType>> positions;
 		};
 
 		StartParam& getStartParam()
@@ -110,8 +109,24 @@ struct MessageData
 		MovePieceParam& getMovePieceParam()
 		{ return boost::get<MovePieceParam>(param); }
 
+		struct ChatMsgParam
+		{
+			std::string content;
+		};
+
+		ChatMsgParam& GetChatMsgParam()
+		{ return boost::get<ChatMsgParam>(param); }
+
 		ActionType action;
-		boost::variant<CreateGameParam, JoinGameParam, ResumeGameParam, StartParam, MovePieceParam> param;
+
+		boost::variant<
+			CreateGameParam,
+			JoinGameParam,
+			ResumeGameParam,
+			StartParam,
+			MovePieceParam,
+			ChatMsgParam
+		> param;
 
 		RequestData()
 			: action(ACTION_UNDEFINED)
