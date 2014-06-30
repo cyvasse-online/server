@@ -59,6 +59,8 @@ class getReplyParam : public boost::static_visitor<Json::Value>
 			Json::Value val;
 			val["ruleSet"]  = RuleSetToStr(data.ruleSet);
 			val["playerID"] = data.playerID;
+
+			return val;
 		}
 };
 
