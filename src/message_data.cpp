@@ -37,7 +37,8 @@ ENUM_STR(ActionType, ({
 	{ACTION_RESUME_GAME, "resume game"},
 	{ACTION_START, "start"},
 	{ACTION_MOVE_PIECE, "move piece"},
-	{ACTION_RESIGN, "resign"}
+	{ACTION_RESIGN, "resign"},
+	{ACTION_CHAT_MSG, "chat message"}
 }))
 
 class getReplyParam : public boost::static_visitor<Json::Value>
@@ -119,6 +120,9 @@ std::string MessageData::serialize()
 					}
 					case ACTION_CHAT_MSG:
 					{
+						auto& chatMsgData = requestData.getChatMsgParam();
+
+						param["content"] = chatMsgData.content;
 						break;
 					}
 				}
@@ -217,6 +221,14 @@ void MessageData::deserialize(const std::string& text)
 					break;
 				case ACTION_RESIGN:
 					break;
+				case ACTION_CHAT_MSG:
+				{
+					requestData.param = RequestData::ChatMsgParam();
+					auto& chatMsgData = requestData.getChatMsgParam();
+
+					chatMsgData.content = param["content"].asString();
+					break;
+				}
 			}
 			break;
 		}
@@ -226,7 +238,7 @@ void MessageData::deserialize(const std::string& text)
 			auto& replyData = getReplyData();
 
 			replyData.success = json.get("success", false).asBool();
-			replyData.error = json.get("error", "").asString();
+			replyData.error = json["error"].asString();
 			break;
 		}
 		default:

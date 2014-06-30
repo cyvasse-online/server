@@ -114,7 +114,7 @@ struct MessageData
 			std::string content;
 		};
 
-		ChatMsgParam& GetChatMsgParam()
+		ChatMsgParam& getChatMsgParam()
 		{ return boost::get<ChatMsgParam>(param); }
 
 		ActionType action;
