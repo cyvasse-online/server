@@ -19,7 +19,6 @@
 
 #include <string>
 #include <thread>
-#include "message_data.hpp"
 
 class CyvasseServer;
 

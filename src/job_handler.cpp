@@ -17,6 +17,10 @@
 #include "job_handler.hpp"
 
 #include <set>
+#include <jsoncpp/json/value.h>
+#include <jsoncpp/json/reader.h>
+#include <jsoncpp/json/writer.h>
+#include <server_message.hpp>
 #include "b64.hpp"
 #include "cyvasse_server.hpp"
 
@@ -39,6 +43,9 @@ void JobHandler::processMessages()
 	auto& matchConnections = _server._matchConnections;
 	auto& server = _server._wsServer;
 
+	Json::Reader reader;
+	Json::FastWriter writer;
+
 	while(_server._running)
 	{
 		std::unique_lock<std::mutex> lock(_server._jobMtx);
@@ -55,14 +62,10 @@ void JobHandler::processMessages()
 		lock.unlock();
 
 		// Process job
-		MessageData msgData;
-		try
+		Json::Value msgData;
+		if(!reader.parse(job->second->get_payload(), msgData, false))
 		{
-			msgData.deserialize(job->second->get_payload());
-		}
-		catch(MessageDataParseError& e)
-		{
-			switch(msgData.messageType)
+			switch(StrToMessageType(msgData["messageType"].asString()))
 			{
 				case MESSAGE_REQUEST:
 					// reply with an error message
@@ -95,28 +98,28 @@ void JobHandler::processMessages()
 			}
 		}
 
-		switch(msgData.messageType)
+		switch(StrToMessageType(msgData["messageType"].asString()))
 		{
 			case MESSAGE_REQUEST:
 			{
-				auto& requestData = msgData.getRequestData();
+				auto& param = msgData["param"];
 
 				// reply object is created for every request but is discarded if action
 				// is not {create, join, resume} game and it doesn't contain any error
-				MessageData replyObj;
-				replyObj.messageType = MESSAGE_REPLY;
-				replyObj.messageID = msgData.messageID;
+				Json::Value replyData;
+				replyData["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
+				// cast to int and back to not allow any non-numeral data
+				replyData["messageID"] = msgData["messageID"].asInt();
 
-				replyObj.data = MessageData::ReplyData();
-				auto& replyData = replyObj.getReplyData();
+
 
 				auto setError = [&](const std::string& error) {
-						replyData.success = false;
-						replyData.error = error;
+						replyData["success"] = false;
+						replyData["error"] = error;
 					};
 
 				std::unique_lock<std::mutex> lock(_server._connMapMtx);
-				switch(requestData.action)
+				switch(StrToActionType(msgData["action"].asString()))
 				{
 					case ACTION_CREATE_GAME:
 					{
@@ -138,19 +141,17 @@ void JobHandler::processMessages()
 
 							std::string playerID(int48ToB64ID(_server._int48Generator()));
 
-							replyData.success = true;
+							replyData["success"] = true;
 
-							replyData.param = MessageData::ReplyData::CreateGameParam();
-							auto& createGameReplyData = replyData.getCreateGameParam();
-							createGameReplyData.matchID  = matchID;
-							createGameReplyData.playerID = playerID;
+							auto& replyParam = replyData["param"];
+							replyParam["matchID"]  = matchID;
+							replyParam["playerID"] = playerID;
 						}
 						break;
 					}
 					case ACTION_JOIN_GAME:
 					{
-						auto& joinGameData = requestData.getJoinGameParam();
-						auto it = matchConnections.find(joinGameData.matchID);
+						auto it = matchConnections.find(param["matchID"].asString());
 
 						if(connectionMatchesIt != connectionMatches.end())
 							setError("This connection is already in use for a running match");
@@ -158,18 +159,19 @@ void JobHandler::processMessages()
 							setError("Game not found");
 						else
 						{
-							auto tmp = connectionMatches.emplace(job->first, joinGameData.matchID);
+							auto tmp = connectionMatches.emplace(job->first, param["matchID"].asString());
 							assert(tmp.second);
 
 							it->second.push_back(job->first);
 
 							std::string playerID(int48ToB64ID(_server._int48Generator()));
 
-							replyData.success = true;
+							replyData["success"] = true;
 
-							replyData.param = MessageData::ReplyData::JoinGameParam();
-							auto& joinGameReplyData = replyData.getJoinGameParam();
-							joinGameReplyData.playerID = playerID;
+							auto& replyParam = replyData["param"];
+							// replyParam["ruleSet"]
+							// replyParam["color"]
+							replyParam["playerID"] = playerID;
 						}
 						break;
 					}
@@ -194,7 +196,7 @@ void JobHandler::processMessages()
 							setError("No other players in this match");
 						else
 						{
-							std::string json = msgData.serialize();
+							std::string json = writer.write(msgData);
 							for(auto hdl : otherPlayers)
 								server.send(hdl, json, opcode::text);
 
@@ -205,22 +207,20 @@ void JobHandler::processMessages()
 					}
 				}
 
-				server.send(job->first, replyObj.serialize(), opcode::text);
+				server.send(job->first, writer.write(replyData), opcode::text);
 
 				break;
 			}
 			case MESSAGE_REPLY:
 			{
-				auto& replyData = msgData.getReplyData();
-
-				if(!replyData.success)
+				if(!msgData["success"])
 				{
-					replyData.error = replyData.error.empty() ?
+					msgData["error"] = msgData["error"].asString().empty() ?
 						"The opponents client sent an error message without any detail" :
-						"The opponents client sent the following error message: " + replyData.error;
+						"The opponents client sent the following error message: " + msgData["error"].asString();
 				}
 
-				std::string json = msgData.serialize();
+				std::string json = writer.write(msgData);
 				for(auto hdl : otherPlayers)
 					server.send(hdl, json, opcode::text);
 
