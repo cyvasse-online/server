@@ -106,16 +106,16 @@ void JobHandler::processMessages()
 
 				// reply object is created for every request but is discarded if action
 				// is not {create, join, resume} game and it doesn't contain any error
-				Json::Value replyData;
-				replyData["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
+				Json::Value reply;
+				reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
 				// cast to int and back to not allow any non-numeral data
-				replyData["messageID"] = msgData["messageID"].asInt();
+				reply["messageID"] = msgData["messageID"].asInt();
 
 
 
 				auto setError = [&](const std::string& error) {
-						replyData["success"] = false;
-						replyData["error"] = error;
+						reply["success"] = false;
+						reply["error"] = error;
 					};
 
 				std::unique_lock<std::mutex> lock(_server._connMapMtx);
@@ -141,11 +141,9 @@ void JobHandler::processMessages()
 
 							std::string playerID(int48ToB64ID(_server._int48Generator()));
 
-							replyData["success"] = true;
-
-							auto& replyParam = replyData["param"];
-							replyParam["matchID"]  = matchID;
-							replyParam["playerID"] = playerID;
+							reply["success"] = true;
+							reply["data"]["matchID"]  = matchID;
+							reply["data"]["playerID"] = playerID;
 						}
 						break;
 					}
@@ -166,12 +164,10 @@ void JobHandler::processMessages()
 
 							std::string playerID(int48ToB64ID(_server._int48Generator()));
 
-							replyData["success"] = true;
-
-							auto& replyParam = replyData["param"];
-							// replyParam["ruleSet"]
-							// replyParam["color"]
-							replyParam["playerID"] = playerID;
+							reply["success"] = true;
+							reply["data"]["ruleSet"]  = "mikelepage";
+							reply["data"]["color"]    = "white";
+							reply["data"]["playerID"] = playerID;
 						}
 						break;
 					}
@@ -207,7 +203,7 @@ void JobHandler::processMessages()
 					}
 				}
 
-				server.send(job->first, writer.write(replyData), opcode::text);
+				server.send(job->first, writer.write(reply), opcode::text);
 
 				break;
 			}
