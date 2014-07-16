@@ -18,10 +18,11 @@
 #define _PLAYER_MANAGER_HPP_
 
 #include <tntdb/connection.h>
-#include "player.hpp"
 
 namespace cyvdb
 {
+	class Player;
+
 	class PlayerManager
 	{
 		private:
@@ -34,7 +35,11 @@ namespace cyvdb
 
 			PlayerManager();
 
+			// queries
 			Player getPlayer(const std::string& playerID);
+
+			// modifications
+			void addPlayer(Player&);
 	};
 }
 

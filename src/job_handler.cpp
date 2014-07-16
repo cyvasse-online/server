@@ -17,10 +17,13 @@
 #include "job_handler.hpp"
 
 #include <set>
+#include <stdexcept>
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/reader.h>
 #include <jsoncpp/json/writer.h>
+#include <tntdb/connect.h>
 #include <server_message.hpp>
+#include "db/db_config.hpp"
 #include "b64.hpp"
 #include "cyvasse_server.hpp"
 
@@ -61,6 +64,12 @@ void JobHandler::processMessages()
 
 		lock.unlock();
 
+		auto dbUrl = cyvdb::DBConfig::glob().getMatchDataUrl();
+		if(dbUrl.empty())
+			throw std::runtime_error("no match data dburl set up");
+
+		auto dbConn = tntdb::connectCached(dbUrl);
+
 		// Process job
 		Json::Value msgData;
 		if(!reader.parse(job->second->get_payload(), msgData, false))
@@ -73,7 +82,6 @@ void JobHandler::processMessages()
 				case MESSAGE_REPLY:
 					// send an error message to the other player
 					break;
-				// default: do nothing
 			}
 			return;
 		}
@@ -110,8 +118,6 @@ void JobHandler::processMessages()
 				reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
 				// cast to int and back to not allow any non-numeral data
 				reply["messageID"] = msgData["messageID"].asInt();
-
-
 
 				auto setError = [&](const std::string& error) {
 						reply["success"] = false;

@@ -18,10 +18,11 @@
 #define _MATCH_MANAGER_HPP_
 
 #include <tntdb/connection.h>
-#include "match.hpp"
 
 namespace cyvdb
 {
+	class Match;
+
 	class MatchManager
 	{
 		private:
@@ -34,7 +35,11 @@ namespace cyvdb
 
 			MatchManager();
 
+			// queries
 			Match getMatch(const std::string& matchID);
+
+			// modifications
+			void addMatch(Match&);
 	};
 }
 

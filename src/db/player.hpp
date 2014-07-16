@@ -18,25 +18,25 @@
 #define _PLAYER_HPP_
 
 #include <string>
-#include <cyvmath/players_color.hpp>
+#include <cyvmath/player.hpp>
 
 namespace cyvdb
 {
-	class Player
+	using cyvmath::PlayersColor;
+	using cyvmath::PLAYER_UNDEFINED;
+
+	class Player : public cyvmath::Player
 	{
 		private:
 			const std::string _id;
-
 			const std::string _matchID;
-			cyvmath::PlayersColor _color;
 
 		public:
 			static std::string getValidOrEmptyID(const std::string&);
 
 			Player(const std::string& id = std::string(), const std::string& matchID = std::string(),
-			       cyvmath::PlayersColor = cyvmath::PLAYER_UNDEFINED);
-			Player(const char* id, const std::string& matchID = std::string(),
-			       cyvmath::PlayersColor = cyvmath::PLAYER_UNDEFINED);
+			       PlayersColor = PLAYER_UNDEFINED);
+			Player(const char* id, const std::string& matchID = std::string(), PlayersColor = PLAYER_UNDEFINED);
 
 			bool valid() const;
 
@@ -44,6 +44,9 @@ namespace cyvdb
 			{
 				return valid();
 			}
+
+			bool setupComplete() override
+			{ return true; } // TODO
 	};
 }
 

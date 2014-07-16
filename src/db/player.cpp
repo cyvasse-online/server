@@ -27,9 +27,9 @@ namespace cyvdb
 	}
 
 	Player::Player(const std::string& id, const std::string& matchID, PlayersColor color)
-		: _id(getValidOrEmptyID(id))
+		: cyvmath::Player(color)
+		, _id(getValidOrEmptyID(id))
 		, _matchID(matchID)
-		, _color(color)
 	{ }
 
 	Player::Player(const char* id, const std::string& matchID, PlayersColor color)

@@ -19,6 +19,7 @@
 #include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <tntdb/statement.h>
+#include "match.hpp"
 #include "db_config.hpp"
 
 using namespace cyvmath;
@@ -26,12 +27,8 @@ using namespace cyvmath;
 namespace cyvdb
 {
 	MatchManager::MatchManager()
-		try : _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
+		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
 	{ }
-	catch(tntdb::Error& e)
-	{
-		throw std::runtime_error(std::string("Couldn't connect to database: ") + e.what());
-	}
 
 	Match MatchManager::getMatch(const std::string& matchID)
 	{
@@ -51,9 +48,10 @@ namespace cyvdb
 		{
 			return Match();
 		}
-		catch(tntdb::Error& e)
-		{
-			throw std::runtime_error(std::string("Error in database query: ") + e.what());
-		}
+	}
+
+	void MatchManager::addMatch(Match& match)
+	{
+		// TODO
 	}
 }

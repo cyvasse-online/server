@@ -19,6 +19,7 @@
 #include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <tntdb/statement.h>
+#include "player.hpp"
 #include "db_config.hpp"
 
 using namespace cyvmath;
@@ -26,12 +27,8 @@ using namespace cyvmath;
 namespace cyvdb
 {
 	PlayerManager::PlayerManager()
-		try : _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
+		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
 	{ }
-	catch(tntdb::Error& e)
-	{
-		throw std::runtime_error(std::string("Couldn't connect to database: ") + e.what());
-	}
 
 	Player PlayerManager::getPlayer(const std::string& playerID)
 	{
@@ -51,9 +48,10 @@ namespace cyvdb
 		{
 			return Player();
 		}
-		catch(tntdb::Error& e)
-		{
-			throw std::runtime_error(std::string("Error in database query: ") + e.what());
-		}
+	}
+
+	void PlayerManager::addPlayer(Player& player)
+	{
+		// TODO
 	}
 }
