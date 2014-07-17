@@ -65,17 +65,40 @@ namespace cyvdb
 		if(!match.valid())
 			throw std::invalid_argument("The given Match object is invalid");
 
-		// TODO: throw another std::invalid_argument if match.id is already in the db
+		int ruleSetID;
 
-		// TODO: add subquery or INSERT INTO ... SELECT
-		// to conform with latest db model
+		try
+		{
+			ruleSetID = _conn.prepareCached(
+				"SELECT rule_set_id "
+				"FROM rule_sets "
+				"WHERE rule_set_str = :ruleSetStr",
+				"getRuleSetID" // cache key
+				)
+				.set("ruleSetStr", RuleSetToStr(match.ruleSet))
+				.selectValue()
+				.getInt();
+		}
+		catch(tntdb::NotFound&)
+		{
+			_conn.prepareCached(
+				"INSERT INTO rule_sets(rule_set_str) "
+				"VALUES (:ruleSetStr)",
+				"addRuleSet" // cache key
+				)
+				.set("ruleSetStr", RuleSetToStr(match.ruleSet))
+				.execute();
+
+			ruleSetID = _conn.lastInsertId();
+		}
+
 		_conn.prepareCached(
 			"INSERT INTO matches (match_id, rule_set, searching_for_player) "
-			"VALUES (:id, :ruleSet, :searchingForPlayer)",
-			"addMatch" // statement cache key
+			"VALUES (:id, :ruleSetID, :searchingForPlayer)",
+			"addMatch" // cache key
 			)
 			.set("id", match.id)
-			.set("ruleSet", RuleSetToStr(match.ruleSet))
+			.set("ruleSetID", ruleSetID)
 			.set("searchingForPlayer", match.searchingForPlayer)
 			.execute();
 	}
