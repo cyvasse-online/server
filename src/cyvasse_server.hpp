@@ -22,7 +22,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <set>
 #include <utility>
 
@@ -59,9 +58,6 @@ class CyvasseServer
 		std::condition_variable _jobCond;
 
 		std::atomic<bool> _running;
-
-		std::ranlux24 _int24Generator;
-		std::ranlux48 _int48Generator;
 
 	public:
 		CyvasseServer();

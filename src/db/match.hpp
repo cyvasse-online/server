@@ -22,27 +22,30 @@
 
 namespace cyvdb
 {
-	class Match
+	using cyvmath::RuleSet;
+	using cyvmath::RULESET_UNDEFINED;
+
+	struct Match
 	{
-		private:
-			const std::string _id;
+		const std::string id;
 
-			cyvmath::RuleSet _ruleSet;
-			bool _searchingForPlayer;
+		const RuleSet ruleSet;
+		bool searchingForPlayer;
 
-		public:
-			static std::string getValidOrEmptyID(const std::string&);
 
-			Match(const std::string& id = std::string(), cyvmath::RuleSet = cyvmath::RULESET_UNDEFINED,
-			      bool searchingForPlayer = true);
-			Match(const char* id, cyvmath::RuleSet = cyvmath::RULESET_UNDEFINED, bool searchingForPlayer = true);
+		Match(const std::string& argID = std::string(),
+		      RuleSet argRuleSet = RULESET_UNDEFINED,
+		      bool argSearchingForPlayer = true)
+			: id{argID}
+			, ruleSet{argRuleSet}
+			, searchingForPlayer{argSearchingForPlayer}
+		{ }
 
-			bool valid() const;
-
-			explicit operator bool() const
-			{
-				return valid();
-			}
+		bool valid() const
+		{
+			return id.length() == 4
+				&& ruleSet != RULESET_UNDEFINED;
+		}
 	};
 }
 

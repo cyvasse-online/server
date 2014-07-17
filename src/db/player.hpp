@@ -27,22 +27,23 @@ namespace cyvdb
 
 	class Player : public cyvmath::Player
 	{
-		private:
-			const std::string _id;
-			const std::string _matchID;
-
 		public:
-			static std::string getValidOrEmptyID(const std::string&);
+			const std::string id;
+			const std::string matchID;
 
-			Player(const std::string& id = std::string(), const std::string& matchID = std::string(),
-			       PlayersColor = PLAYER_UNDEFINED);
-			Player(const char* id, const std::string& matchID = std::string(), PlayersColor = PLAYER_UNDEFINED);
 
-			bool valid() const;
+			Player(const std::string& argID = std::string(),
+			       const std::string& argMatchID = std::string(),
+			       PlayersColor argColor = PLAYER_UNDEFINED)
+				: cyvmath::Player{argColor}
+				, id{argID}
+				, matchID{argMatchID}
+			{ }
 
-			explicit operator bool() const
+			bool valid() const
 			{
-				return valid();
+				return id.length() == 8
+					&& _color != PLAYER_UNDEFINED;
 			}
 
 			bool setupComplete() override

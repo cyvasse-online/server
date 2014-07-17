@@ -16,18 +16,27 @@
 
 #include "player_manager.hpp"
 
+#include <chrono>
 #include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <tntdb/statement.h>
+#include "../b64.hpp"
 #include "player.hpp"
 #include "db_config.hpp"
 
+using std::chrono::system_clock;
 using namespace cyvmath;
 
 namespace cyvdb
 {
+	PlayerManager::PlayerManager(tntdb::Connection& conn)
+		: _conn(conn)
+		, _int48Generator(system_clock::now().time_since_epoch().count())
+	{ }
+
 	PlayerManager::PlayerManager()
 		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
+		, _int48Generator(system_clock::now().time_since_epoch().count())
 	{ }
 
 	Player PlayerManager::getPlayer(const std::string& playerID)
@@ -52,6 +61,37 @@ namespace cyvdb
 
 	void PlayerManager::addPlayer(Player& player)
 	{
-		// TODO
+		if(!player.valid())
+			throw std::invalid_argument("The given Player object is invalid");
+
+		_conn.prepareCached(
+			"INSERT INTO players (player_id, match, color) "
+			"VALUES (:id, :match, :color)",
+			"addPlayer" // statement cache key
+			)
+			.set("id", player.id)
+			.set("match", player.matchID)
+			.set("color", PlayersColorToStr(player.getColor()))
+			.execute();
+	}
+
+	std::string PlayerManager::newPlayerID()
+	{
+		std::string playerID;
+
+		while(true)
+			try
+			{
+				playerID = int48ToB64ID(_int48Generator());
+				_conn.prepareCached("SELECT * FROM players WHERE player_id = :playerID", "searchPlayerID")
+					.set("playerID", playerID)
+					.selectRow();
+			}
+			catch(tntdb::NotFound&)
+			{
+				break;
+			}
+
+		return playerID;
 	}
 }

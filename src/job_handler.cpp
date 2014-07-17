@@ -22,10 +22,16 @@
 #include <jsoncpp/json/reader.h>
 #include <jsoncpp/json/writer.h>
 #include <tntdb/connect.h>
+#include <tntdb/error.h>
 #include <server_message.hpp>
 #include "db/db_config.hpp"
-#include "b64.hpp"
+#include "db/match.hpp"
+#include "db/match_manager.hpp"
+#include "db/player.hpp"
+#include "db/player_manager.hpp"
 #include "cyvasse_server.hpp"
+
+using namespace cyvmath;
 
 JobHandler::JobHandler(CyvasseServer& server)
 	: _server(server)
@@ -133,23 +139,39 @@ void JobHandler::processMessages()
 							setError("This connection is already in use for a running match");
 						else
 						{
-							std::string matchID(int24ToB64ID(_server._int24Generator()));
+							try
+							{
+								cyvdb::MatchManager matchM(dbConn);
+								cyvdb::PlayerManager playerM(dbConn);
 
-							auto tmp1 = connectionMatches.emplace(job->first, matchID);
-							auto tmp2 = matchConnections.emplace(matchID, std::vector<websocketpp::connection_hdl>());
+								auto matchID = matchM.newMatchID();
+								auto playerID = playerM.newPlayerID();
 
-							// both emplacements must be successful when the previous `break` wasn't run
-							assert(tmp1.second);
-							assert(tmp2.second);
+								auto tmp1 = connectionMatches.emplace(job->first, matchID);
+								auto tmp2 = matchConnections.emplace(matchID, std::vector<websocketpp::connection_hdl>());
 
-							// Add the connection handle of the job to the new _matchConnections entries vector
-							tmp2.first->second.push_back(job->first);
+								// both emplacements must be successful when the previous `break` wasn't run
+								assert(tmp1.second);
+								assert(tmp2.second);
 
-							std::string playerID(int48ToB64ID(_server._int48Generator()));
+								// Add the connection handle of the job to the new _matchConnections entries vector
+								tmp2.first->second.push_back(job->first);
 
-							reply["success"] = true;
-							reply["data"]["matchID"]  = matchID;
-							reply["data"]["playerID"] = playerID;
+								// TODO: should these 4 lines of code be executed
+								// after answering the request (in a separate thread)?
+								cyvdb::Match match(matchID, StrToRuleSet(msgData["param"]["ruleSet"].asString()), false);
+								cyvdb::Player player(playerID, matchID, StrToPlayersColor(msgData["param"]["color"].asString()));
+								matchM.addMatch(match);
+								playerM.addPlayer(player);
+
+								reply["success"] = true;
+								reply["data"]["matchID"]  = matchID;
+								reply["data"]["playerID"] = playerID;
+							}
+							catch(tntdb::Error& e)
+							{
+								setError(std::string("SQL error: ") + e.what());
+							}
 						}
 						break;
 					}
@@ -163,12 +185,19 @@ void JobHandler::processMessages()
 							setError("Game not found");
 						else
 						{
-							auto tmp = connectionMatches.emplace(job->first, param["matchID"].asString());
+							// TODO: replace the hardcoded PLAYER_WHITE, "white" and "mikelepage"
+							cyvdb::PlayerManager playerM(dbConn);
+
+							auto matchID = param["matchID"].asString();
+							auto playerID = playerM.newPlayerID();
+
+							auto tmp = connectionMatches.emplace(job->first, matchID);
 							assert(tmp.second);
 
 							it->second.push_back(job->first);
 
-							std::string playerID(int48ToB64ID(_server._int48Generator()));
+							cyvdb::Player player(playerID, matchID, PLAYER_WHITE);
+							playerM.addPlayer(player);
 
 							reply["success"] = true;
 							reply["data"]["ruleSet"]  = "mikelepage";

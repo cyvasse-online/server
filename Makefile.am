@@ -12,11 +12,9 @@ cyvasse_server_SOURCES = \
 	src/job_handler.hpp \
 	src/main.cpp \
 	src/db_config.hpp \
-	src/db/match.cpp \
 	src/db/match.hpp \
 	src/db/match_manager.cpp \
 	src/db/match_manager.hpp \
-	src/db/player.cpp \
 	src/db/player.hpp \
 	src/db/player_manager.cpp \
 	src/db/player_manager.hpp
