@@ -17,7 +17,6 @@
 #ifndef _PLAYER_MANAGER_HPP_
 #define _PLAYER_MANAGER_HPP_
 
-#include <random>
 #include <tntdb/connection.h>
 
 namespace cyvdb
@@ -28,7 +27,6 @@ namespace cyvdb
 	{
 		private:
 			tntdb::Connection _conn;
-			std::ranlux48 _int48Generator;
 
 		public:
 			explicit PlayerManager(tntdb::Connection& conn);
@@ -40,9 +38,6 @@ namespace cyvdb
 
 			// modifications
 			void addPlayer(Player&);
-
-			// other stuff
-			std::string newPlayerID();
 	};
 }
 

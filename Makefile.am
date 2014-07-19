@@ -6,11 +6,15 @@ bin_PROGRAMS = cyvasse-server
 
 cyvasse_server_SOURCES = \
 	src/b64.hpp \
+	src/client_data.cpp \
+	src/client_data.hpp \
 	src/cyvasse_server.cpp \
 	src/cyvasse_server.hpp \
 	src/job_handler.cpp \
 	src/job_handler.hpp \
 	src/main.cpp \
+	src/match_data.cpp \
+	src/match_data.hpp \
 	src/db_config.hpp \
 	src/db/match.hpp \
 	src/db/match_manager.cpp \

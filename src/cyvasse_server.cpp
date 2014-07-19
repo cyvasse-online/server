@@ -16,6 +16,8 @@
 
 #include "cyvasse_server.hpp"
 
+#include "job_handler.hpp"
+
 CyvasseServer::CyvasseServer()
 	: _running(true)
 {

@@ -16,6 +16,8 @@
 
 #include "job_handler.hpp"
 
+#include <chrono>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <jsoncpp/json/value.h>
@@ -24,12 +26,13 @@
 #include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <server_message.hpp>
-#include "db/db_config.hpp"
-#include "db/match.hpp"
-#include "db/match_manager.hpp"
-#include "db/player.hpp"
-#include "db/player_manager.hpp"
+#include <cyvmath/match.hpp>
+#include <cyvmath/player.hpp>
+#include <cyvmath/rule_set_create.hpp>
+#include "b64.hpp"
 #include "cyvasse_server.hpp"
+#include "client_data.hpp"
+#include "match_data.hpp"
 
 using namespace cyvmath;
 
@@ -48,8 +51,8 @@ void JobHandler::processMessages()
 	typedef CyvasseServer::Job Job;
 	using namespace websocketpp::frame;
 
-	auto& connectionMatches = _server._connectionMatches;
-	auto& matchConnections = _server._matchConnections;
+	auto& clientDataSets = _server._clientDataSets;
+	auto& matches = _server._matches;
 	auto& server = _server._wsServer;
 
 	Json::Reader reader;
@@ -70,12 +73,6 @@ void JobHandler::processMessages()
 
 		lock.unlock();
 
-		auto dbUrl = cyvdb::DBConfig::glob().getMatchDataUrl();
-		if(dbUrl.empty())
-			throw std::runtime_error("no match data dburl set up");
-
-		auto dbConn = tntdb::connectCached(dbUrl);
-
 		// Process job
 		Json::Value msgData;
 		if(!reader.parse(job->second->get_payload(), msgData, false))
@@ -92,23 +89,19 @@ void JobHandler::processMessages()
 			return;
 		}
 
-		std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherPlayers;
+		std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherClients;
 
-		CyvasseServer::ConToMatchMap::const_iterator connectionMatchesIt;
-		CyvasseServer::MatchToConMap::const_iterator matchConnectionsIt;
+		std::shared_ptr<ClientData> clientData;
 
-		connectionMatchesIt = connectionMatches.find(job->first);
-		if(connectionMatchesIt != connectionMatches.end())
+		auto it = clientDataSets.find(job->first);
+		if(it != clientDataSets.end())
 		{
-			matchConnectionsIt = matchConnections.find(connectionMatchesIt->second);
-			if(matchConnectionsIt != matchConnections.end())
+			clientData = it->second;
+
+			for(auto it : clientData->getMatchData().getClientDataSets())
 			{
-				for(websocketpp::connection_hdl hdl : matchConnectionsIt->second)
-				{
-					// owner-based ==
-					if(!hdl.owner_before(job->first) && !job->first.owner_before(hdl))
-						otherPlayers.insert(hdl);
-				}
+				if(*it != *clientData)
+					otherClients.insert(it->getConnHdl());
 			}
 		}
 
@@ -135,34 +128,32 @@ void JobHandler::processMessages()
 				{
 					case ACTION_CREATE_GAME:
 					{
-						if(connectionMatchesIt != connectionMatches.end())
+						if(clientData)
 							setError("This connection is already in use for a running match");
 						else
 						{
 							try
 							{
-								cyvdb::MatchManager matchM(dbConn);
-								cyvdb::PlayerManager playerM(dbConn);
+								auto matchID = newMatchID();
+								auto playerID = newPlayerID();
+								auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
 
-								auto matchID = matchM.newMatchID();
-								auto playerID = playerM.newPlayerID();
+								auto matchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
 
-								auto tmp1 = connectionMatches.emplace(job->first, matchID);
-								auto tmp2 = matchConnections.emplace(matchID, std::vector<websocketpp::connection_hdl>());
+								auto clientData = std::make_shared<ClientData>(
+									playerID,
+									createPlayer(StrToPlayersColor(param["color"].asString()), *matchData->getMatch()),
+									*matchData
+									);
 
-								// both emplacements must be successful when the previous `break` wasn't run
+								matchData->getClientDataSets().insert(clientData);
+
+								auto tmp1 = clientDataSets.emplace(job->first, clientData);
+								auto tmp2 = matches.emplace(matchID, matchData);
+
+								// both emplacements must be successful
 								assert(tmp1.second);
 								assert(tmp2.second);
-
-								// Add the connection handle of the job to the new _matchConnections entries vector
-								tmp2.first->second.push_back(job->first);
-
-								// TODO: should these 4 lines of code be executed
-								// after answering the request (in a separate thread)?
-								cyvdb::Match match(matchID, StrToRuleSet(msgData["param"]["ruleSet"].asString()), false);
-								cyvdb::Player player(playerID, matchID, StrToPlayersColor(msgData["param"]["color"].asString()));
-								matchM.addMatch(match);
-								playerM.addPlayer(player);
 
 								reply["success"] = true;
 								reply["data"]["matchID"]  = matchID;
@@ -177,32 +168,47 @@ void JobHandler::processMessages()
 					}
 					case ACTION_JOIN_GAME:
 					{
-						auto it = matchConnections.find(param["matchID"].asString());
+						auto it = matches.find(param["matchID"].asString());
 
-						if(connectionMatchesIt != connectionMatches.end())
+						if(clientData)
 							setError("This connection is already in use for a running match");
-						else if(it == matchConnections.end())
+						else if(it == matches.end())
 							setError("Game not found");
 						else
 						{
-							// TODO: replace the hardcoded PLAYER_WHITE, "white" and "mikelepage"
-							cyvdb::PlayerManager playerM(dbConn);
-
 							auto matchID = param["matchID"].asString();
-							auto playerID = playerM.newPlayerID();
+							auto playerID = newPlayerID();
 
-							auto tmp = connectionMatches.emplace(job->first, matchID);
-							assert(tmp.second);
+							auto matchData = it->second;
+							auto matchClients = matchData->getClientDataSets();
 
-							it->second.push_back(job->first);
+							if(matchClients.size() == 0)
+								setError("You tried to join a game without an active player, this doesn't work yet");
+							else if(matchClients.size() > 1)
+								setError("This game already has two players");
+							else
+							{
+								auto color = (*matchClients.begin())->getPlayer()->getColor() == PLAYER_WHITE
+									? PLAYER_BLACK
+									: PLAYER_WHITE;
 
-							cyvdb::Player player(playerID, matchID, PLAYER_WHITE);
-							playerM.addPlayer(player);
+								auto clientData = std::make_shared<ClientData>(
+									playerID,
+									createPlayer(color, *matchData->getMatch()),
+									*matchData
+									);
 
-							reply["success"] = true;
-							reply["data"]["ruleSet"]  = "mikelepage";
-							reply["data"]["color"]    = "white";
-							reply["data"]["playerID"] = playerID;
+								matchData->getClientDataSets().insert(clientData);
+
+								auto tmp = clientDataSets.emplace(job->first, clientData);
+
+								assert(tmp.second);
+
+								reply["success"] = true;
+								reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
+								reply["data"]["color"]    = PlayersColorToStr(color);
+								reply["data"]["playerID"] = playerID;
+							}
 						}
 						break;
 					}
@@ -219,16 +225,14 @@ void JobHandler::processMessages()
 						break;*/
 					default:
 					{
-						if(connectionMatchesIt == connectionMatches.end())
+						if(!clientData)
 							setError("Could not find the match this message belongs to");
-						else if(matchConnectionsIt == matchConnections.end())
-							setError("Game this message belongs to not found");
-						else if(otherPlayers.empty())
+						else if(otherClients.empty())
 							setError("No other players in this match");
 						else
 						{
 							std::string json = writer.write(msgData);
-							for(auto hdl : otherPlayers)
+							for(auto hdl : otherClients)
 								server.send(hdl, json, opcode::text);
 
 							return; // don't send a reply to the requesting client
@@ -252,7 +256,7 @@ void JobHandler::processMessages()
 				}
 
 				std::string json = writer.write(msgData);
-				for(auto hdl : otherPlayers)
+				for(auto hdl : otherClients)
 					server.send(hdl, json, opcode::text);
 
 				break;
@@ -260,4 +264,29 @@ void JobHandler::processMessages()
 			default: assert(0);
 		}
 	}
+}
+
+using std::chrono::system_clock;
+
+std::string JobHandler::newMatchID()
+{
+	static std::ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
+
+	std::string res;
+
+	do
+	{
+		res = int24ToB64ID(int24Generator());
+	}
+	while(_server._matches.find(res) != _server._matches.end());
+
+	return res;
+}
+
+std::string JobHandler::newPlayerID()
+{
+	static std::ranlux48 int48Generator(system_clock::now().time_since_epoch().count());
+
+	// TODO
+	return int48ToB64ID(int48Generator());
 }

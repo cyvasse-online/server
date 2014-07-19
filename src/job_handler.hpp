@@ -35,6 +35,9 @@ struct JobHandler
 
 		// JobHandler main loop
 		void processMessages();
+
+		std::string newMatchID();
+		std::string newPlayerID();
 };
 
 #endif // _JOB_HANDLER_HPP_

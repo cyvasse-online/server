@@ -16,28 +16,23 @@
 
 #include "match_manager.hpp"
 
-#include <chrono>
 #include <stdexcept>
 #include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <tntdb/statement.h>
-#include "../b64.hpp"
 #include "match.hpp"
 #include "db_config.hpp"
 
-using std::chrono::system_clock;
 using namespace cyvmath;
 
 namespace cyvdb
 {
 	MatchManager::MatchManager(tntdb::Connection& conn)
 		: _conn(conn)
-		, _int24Generator(system_clock::now().time_since_epoch().count())
 	{ }
 
 	MatchManager::MatchManager()
 		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
-		, _int24Generator(system_clock::now().time_since_epoch().count())
 	{ }
 
 	Match MatchManager::getMatch(const std::string& matchID)
@@ -101,25 +96,5 @@ namespace cyvdb
 			.set("ruleSetID", ruleSetID)
 			.set("searchingForPlayer", match.searchingForPlayer)
 			.execute();
-	}
-
-	std::string MatchManager::newMatchID()
-	{
-		std::string matchID;
-
-		while(true)
-			try
-			{
-				matchID = int24ToB64ID(_int24Generator());
-				_conn.prepareCached("SELECT * FROM matches WHERE match_id = :matchID", "searchMatchID")
-					.set("matchID", matchID)
-					.selectRow();
-			}
-			catch(tntdb::NotFound&)
-			{
-				break;
-			}
-
-		return matchID;
 	}
 }

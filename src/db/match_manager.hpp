@@ -17,7 +17,6 @@
 #ifndef _MATCH_MANAGER_HPP_
 #define _MATCH_MANAGER_HPP_
 
-#include <random>
 #include <tntdb/connection.h>
 
 namespace cyvdb
@@ -28,7 +27,6 @@ namespace cyvdb
 	{
 		private:
 			tntdb::Connection _conn;
-			std::ranlux24 _int24Generator;
 
 		public:
 			explicit MatchManager(tntdb::Connection& conn);
@@ -40,9 +38,6 @@ namespace cyvdb
 
 			// modifications
 			void addMatch(Match&);
-
-			// other stuff
-			std::string newMatchID();
 	};
 }
 

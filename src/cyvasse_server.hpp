@@ -30,7 +30,9 @@
 #include <websocketpp/server.hpp>
 #undef _WEBSOCKETPP_CPP11_STL_
 
-#include "job_handler.hpp"
+class JobHandler;
+class ClientData;
+class MatchData;
 
 class CyvasseServer
 {
@@ -39,16 +41,17 @@ class CyvasseServer
 	private:
 		typedef websocketpp::server<websocketpp::config::asio> WSServer;
 
-		typedef std::map<websocketpp::connection_hdl, std::string, std::owner_less<websocketpp::connection_hdl>> ConToMatchMap;
-		typedef std::map<std::string, std::vector<websocketpp::connection_hdl>> MatchToConMap;
+		typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>,
+		                 std::owner_less<websocketpp::connection_hdl>> ClientDataMap;
+		typedef std::map<std::string, std::shared_ptr<MatchData>> MatchMap;
 
 		typedef std::pair<websocketpp::connection_hdl, WSServer::message_ptr> Job;
 		typedef std::queue<std::unique_ptr<Job>> JobQueue;
 
 		WSServer _wsServer;
 
-		ConToMatchMap _connectionMatches;
-		MatchToConMap _matchConnections;
+		ClientDataMap _clientDataSets;
+		MatchMap _matches;
 
 		std::mutex _connMapMtx;
 
