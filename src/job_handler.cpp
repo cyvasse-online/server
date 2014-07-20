@@ -213,33 +213,8 @@ void JobHandler::processMessages()
 						break;
 					}
 					case ACTION_RESUME_GAME:
+						// TODO
 						break;
-					/*case ACTION_START:
-						break;
-					case ACTION_MOVE_PIECE:
-						break;
-					case ACTION_RESIGN:
-						break;
-					default:
-						assert(0);
-						break;*/
-					default:
-					{
-						if(!clientData)
-							setError("Could not find the match this message belongs to");
-						else if(otherClients.empty())
-							setError("No other players in this match");
-						else
-						{
-							std::string json = writer.write(msgData);
-							for(auto hdl : otherClients)
-								server.send(hdl, json, opcode::text);
-
-							return; // don't send a reply to the requesting client
-						}
-
-						break;
-					}
 				}
 
 				server.send(job->first, writer.write(reply), opcode::text);
@@ -248,7 +223,7 @@ void JobHandler::processMessages()
 			}
 			case MESSAGE_REPLY:
 			{
-				if(!msgData["success"])
+				if(!msgData["success"].asBool())
 				{
 					msgData["error"] = msgData["error"].asString().empty() ?
 						"The opponents client sent an error message without any detail" :
@@ -261,7 +236,16 @@ void JobHandler::processMessages()
 
 				break;
 			}
-			default: assert(0);
+			case MESSAGE_GAME_UPDATE:
+			{
+				std::string json = writer.write(msgData);
+				for(auto hdl : otherClients)
+					server.send(hdl, json, opcode::text);
+
+				break;
+			}
+			default:
+				assert(0);
 		}
 	}
 }
