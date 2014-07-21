@@ -19,9 +19,9 @@
 
 #include <memory>
 #include <set>
+#include <cyvmath/match.hpp>
 #include <cyvmath/rule_sets.hpp>
 
-namespace cyvmath { class Match; }
 using cyvmath::Match;
 using cyvmath::RuleSet;
 

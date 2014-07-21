@@ -53,14 +53,17 @@ class CyvasseServer
 		ClientDataMap _clientDataSets;
 		MatchMap _matches;
 
-		std::mutex _connMapMtx;
+		std::mutex _clientDataMtx;
+		std::mutex _matchDataMtx;
 
 		JobQueue _jobQueue;
-		std::set<std::unique_ptr<JobHandler>> _workers;
+
 		std::mutex _jobMtx;
 		std::condition_variable _jobCond;
 
 		std::atomic<bool> _running;
+
+		std::set<std::unique_ptr<JobHandler>> _workers;
 
 	public:
 		CyvasseServer();
@@ -69,7 +72,10 @@ class CyvasseServer
 		void run(uint16_t port, unsigned nWorkers);
 		void stop();
 
-		void onMessage(websocketpp::connection_hdl hdl, WSServer::message_ptr msg);
+		void onMessage(websocketpp::connection_hdl, WSServer::message_ptr);
+		void onClose(websocketpp::connection_hdl);
+
+		void onHttpRequest(websocketpp::connection_hdl);
 };
 
 #endif // _CYVASSE_SERVER_HPP_

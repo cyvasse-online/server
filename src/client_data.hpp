@@ -19,8 +19,8 @@
 
 #include <memory>
 #include <websocketpp/common/connection_hdl.hpp>
+#include <cyvmath/player.hpp>
 
-namespace cyvmath { class Player; }
 using cyvmath::Player;
 
 class MatchData;

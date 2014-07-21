@@ -60,10 +60,10 @@ void JobHandler::processMessages()
 
 	while(_server._running)
 	{
-		std::unique_lock<std::mutex> lock(_server._jobMtx);
+		std::unique_lock<std::mutex> jobLock(_server._jobMtx);
 
 		while(_server._running && _server._jobQueue.empty())
-			_server._jobCond.wait(lock);
+			_server._jobCond.wait(jobLock);
 
 		if(!_server._running)
 			break;
@@ -71,7 +71,7 @@ void JobHandler::processMessages()
 		std::unique_ptr<Job> job = std::move(_server._jobQueue.front());
 		_server._jobQueue.pop();
 
-		lock.unlock();
+		jobLock.unlock();
 
 		try
 		{
@@ -79,15 +79,7 @@ void JobHandler::processMessages()
 			Json::Value msgData;
 			if(!reader.parse(job->second->get_payload(), msgData, false))
 			{
-				switch(StrToMessageType(msgData["messageType"].asString()))
-				{
-					case MESSAGE_REQUEST:
-						// reply with an error message
-						break;
-					case MESSAGE_REPLY:
-						// send an error message to the other player
-						break;
-				}
+				// TODO: reply with error message
 				return;
 			}
 
@@ -95,17 +87,22 @@ void JobHandler::processMessages()
 
 			std::shared_ptr<ClientData> clientData;
 
-			auto it = clientDataSets.find(job->first);
-			if(it != clientDataSets.end())
-			{
-				clientData = it->second;
+			std::unique_lock<std::mutex> matchDataLock(_server._matchDataMtx, std::defer_lock); // don't lock yet
+			std::unique_lock<std::mutex> clientDataLock(_server._clientDataMtx);
 
-				for(auto it : clientData->getMatchData().getClientDataSets())
+			auto it1 = clientDataSets.find(job->first);
+			if(it1 != clientDataSets.end())
+			{
+				clientData = it1->second;
+				clientDataLock.unlock();
+
+				for(auto it2 : clientData->getMatchData().getClientDataSets())
 				{
-					if(*it != *clientData)
-						otherClients.insert(it->getConnHdl());
+					if(*it2 != *clientData)
+						otherClients.insert(it2->getConnHdl());
 				}
 			}
+			else clientDataLock.unlock();
 
 			switch(StrToMessageType(msgData["messageType"].asString()))
 			{
@@ -113,8 +110,6 @@ void JobHandler::processMessages()
 				{
 					auto& param = msgData["param"];
 
-					// reply object is created for every request but is discarded if action
-					// is not {create, join, resume} game and it doesn't contain any error
 					Json::Value reply;
 					reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
 					// cast to int and back to not allow any non-numeral data
@@ -125,7 +120,6 @@ void JobHandler::processMessages()
 							reply["error"] = error;
 						};
 
-					std::unique_lock<std::mutex> lock(_server._connMapMtx);
 					switch(StrToActionType(msgData["action"].asString()))
 					{
 						case ACTION_CREATE_GAME:
@@ -151,11 +145,14 @@ void JobHandler::processMessages()
 
 									matchData->getClientDataSets().insert(clientData);
 
+									clientDataLock.lock();
 									auto tmp1 = clientDataSets.emplace(job->first, clientData);
-									auto tmp2 = matches.emplace(matchID, matchData);
-
-									// both emplacements must be successful
+									clientDataLock.unlock();
 									assert(tmp1.second);
+
+									matchDataLock.lock();
+									auto tmp2 = matches.emplace(matchID, matchData);
+									matchDataLock.unlock();
 									assert(tmp2.second);
 
 									reply["success"] = true;
@@ -171,6 +168,7 @@ void JobHandler::processMessages()
 						}
 						case ACTION_JOIN_GAME:
 						{
+							matchDataLock.lock();
 							auto it = matches.find(param["matchID"].asString());
 
 							if(clientData)
@@ -204,8 +202,9 @@ void JobHandler::processMessages()
 
 									matchData->getClientDataSets().insert(clientData);
 
+									clientDataLock.lock();
 									auto tmp = clientDataSets.emplace(job->first, clientData);
-
+									clientDataLock.unlock();
 									assert(tmp.second);
 
 									reply["success"] = true;
@@ -214,11 +213,19 @@ void JobHandler::processMessages()
 									reply["data"]["playerID"] = playerID;
 								}
 							}
+
+							matchDataLock.unlock();
+
 							break;
 						}
 						case ACTION_RESUME_GAME:
 							// TODO
 							break;
+						case ACTION_CHAT_MSG:
+							// TODO
+							break;
+						default:
+							setError("unrecognized action type");
 					}
 
 					server.send(job->first, writer.write(reply), opcode::text);
@@ -248,6 +255,8 @@ void JobHandler::processMessages()
 
 					break;
 				}
+				default: // TODO: reply with error message
+					break;
 			}
 		}
 		catch(std::error_code& e)
@@ -273,12 +282,15 @@ std::string JobHandler::newMatchID()
 	static std::ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
 
 	std::string res;
+	std::unique_lock<std::mutex> matchDataLock(_server._matchDataMtx);
 
 	do
 	{
 		res = int24ToB64ID(int24Generator());
 	}
 	while(_server._matches.find(res) != _server._matches.end());
+
+	matchDataLock.unlock();
 
 	return res;
 }

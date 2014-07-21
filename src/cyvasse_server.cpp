@@ -16,7 +16,9 @@
 
 #include "cyvasse_server.hpp"
 
+#include "client_data.hpp"
 #include "job_handler.hpp"
+#include "match_data.hpp"
 
 CyvasseServer::CyvasseServer()
 	: _running(true)
@@ -29,6 +31,8 @@ CyvasseServer::CyvasseServer()
 
 	// Register handler callback
 	_wsServer.set_message_handler(std::bind(&CyvasseServer::onMessage, this, _1, _2));
+	_wsServer.set_close_handler(std::bind(&CyvasseServer::onClose, this, _1));
+	//_wsServer.set_http_handler(std::bind(&CyvasseServer::onHttpRequest, this, _1));
 }
 
 CyvasseServer::~CyvasseServer()
@@ -40,7 +44,7 @@ void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 {
 	// start worker threads
 	assert(nWorkers != 0);
-	for(int i = 0; i < nWorkers; i++)
+	for(unsigned i = 0; i < nWorkers; i++)
 		_workers.emplace(new JobHandler(*this));
 
 	// Listen on the specified port
@@ -68,4 +72,42 @@ void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message
 
 	lock.unlock();
 	_jobCond.notify_one();
+}
+
+void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
+{
+	std::unique_lock<std::mutex> matchDataLock(_matchDataMtx, std::defer_lock);
+	std::unique_lock<std::mutex> clientDataLock(_clientDataMtx);
+
+	auto it1 = _clientDataSets.find(hdl);
+	if(it1 == _clientDataSets.end())
+		return;
+
+	std::shared_ptr<ClientData> clientData = it1->second;
+	_clientDataSets.erase(it1);
+	clientDataLock.unlock();
+
+	auto& dataSets = clientData->getMatchData().getClientDataSets();
+
+	auto it2 = dataSets.find(clientData);
+	if(it2 != dataSets.end())
+		dataSets.erase(it2);
+
+	if(dataSets.empty())
+	{
+		// if this was the last / only player connected
+		// to this match, remove the match completely
+
+		matchDataLock.lock();
+		auto it3 = _matches.find(clientData->getMatchData().getID());
+		if(it3 == _matches.end())
+			return; // or assert this won't happen?
+
+		matchDataLock.unlock();
+	}
+}
+
+void CyvasseServer::onHttpRequest(websocketpp::connection_hdl)
+{
+	// TODO: send 301 moved permanently -> domain:80
 }
