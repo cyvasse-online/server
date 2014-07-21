@@ -73,179 +73,195 @@ void JobHandler::processMessages()
 
 		lock.unlock();
 
-		// Process job
-		Json::Value msgData;
-		if(!reader.parse(job->second->get_payload(), msgData, false))
+		try
 		{
+			// Process job
+			Json::Value msgData;
+			if(!reader.parse(job->second->get_payload(), msgData, false))
+			{
+				switch(StrToMessageType(msgData["messageType"].asString()))
+				{
+					case MESSAGE_REQUEST:
+						// reply with an error message
+						break;
+					case MESSAGE_REPLY:
+						// send an error message to the other player
+						break;
+				}
+				return;
+			}
+
+			std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherClients;
+
+			std::shared_ptr<ClientData> clientData;
+
+			auto it = clientDataSets.find(job->first);
+			if(it != clientDataSets.end())
+			{
+				clientData = it->second;
+
+				for(auto it : clientData->getMatchData().getClientDataSets())
+				{
+					if(*it != *clientData)
+						otherClients.insert(it->getConnHdl());
+				}
+			}
+
 			switch(StrToMessageType(msgData["messageType"].asString()))
 			{
 				case MESSAGE_REQUEST:
-					// reply with an error message
-					break;
-				case MESSAGE_REPLY:
-					// send an error message to the other player
-					break;
-			}
-			return;
-		}
-
-		std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherClients;
-
-		std::shared_ptr<ClientData> clientData;
-
-		auto it = clientDataSets.find(job->first);
-		if(it != clientDataSets.end())
-		{
-			clientData = it->second;
-
-			for(auto it : clientData->getMatchData().getClientDataSets())
-			{
-				if(*it != *clientData)
-					otherClients.insert(it->getConnHdl());
-			}
-		}
-
-		switch(StrToMessageType(msgData["messageType"].asString()))
-		{
-			case MESSAGE_REQUEST:
-			{
-				auto& param = msgData["param"];
-
-				// reply object is created for every request but is discarded if action
-				// is not {create, join, resume} game and it doesn't contain any error
-				Json::Value reply;
-				reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
-				// cast to int and back to not allow any non-numeral data
-				reply["messageID"] = msgData["messageID"].asInt();
-
-				auto setError = [&](const std::string& error) {
-						reply["success"] = false;
-						reply["error"] = error;
-					};
-
-				std::unique_lock<std::mutex> lock(_server._connMapMtx);
-				switch(StrToActionType(msgData["action"].asString()))
 				{
-					case ACTION_CREATE_GAME:
+					auto& param = msgData["param"];
+
+					// reply object is created for every request but is discarded if action
+					// is not {create, join, resume} game and it doesn't contain any error
+					Json::Value reply;
+					reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
+					// cast to int and back to not allow any non-numeral data
+					reply["messageID"] = msgData["messageID"].asInt();
+
+					auto setError = [&](const std::string& error) {
+							reply["success"] = false;
+							reply["error"] = error;
+						};
+
+					std::unique_lock<std::mutex> lock(_server._connMapMtx);
+					switch(StrToActionType(msgData["action"].asString()))
 					{
-						if(clientData)
-							setError("This connection is already in use for a running match");
-						else
+						case ACTION_CREATE_GAME:
 						{
-							try
-							{
-								auto matchID = newMatchID();
-								auto playerID = newPlayerID();
-								auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
-
-								auto matchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
-
-								auto clientData = std::make_shared<ClientData>(
-									playerID,
-									createPlayer(StrToPlayersColor(param["color"].asString()), *matchData->getMatch()),
-									*matchData
-									);
-
-								matchData->getClientDataSets().insert(clientData);
-
-								auto tmp1 = clientDataSets.emplace(job->first, clientData);
-								auto tmp2 = matches.emplace(matchID, matchData);
-
-								// both emplacements must be successful
-								assert(tmp1.second);
-								assert(tmp2.second);
-
-								reply["success"] = true;
-								reply["data"]["matchID"]  = matchID;
-								reply["data"]["playerID"] = playerID;
-							}
-							catch(tntdb::Error& e)
-							{
-								setError(std::string("SQL error: ") + e.what());
-							}
-						}
-						break;
-					}
-					case ACTION_JOIN_GAME:
-					{
-						auto it = matches.find(param["matchID"].asString());
-
-						if(clientData)
-							setError("This connection is already in use for a running match");
-						else if(it == matches.end())
-							setError("Game not found");
-						else
-						{
-							auto matchID = param["matchID"].asString();
-							auto playerID = newPlayerID();
-
-							auto matchData = it->second;
-							auto matchClients = matchData->getClientDataSets();
-
-							if(matchClients.size() == 0)
-								setError("You tried to join a game without an active player, this doesn't work yet");
-							else if(matchClients.size() > 1)
-								setError("This game already has two players");
+							if(clientData)
+								setError("This connection is already in use for a running match");
 							else
 							{
-								auto color = (*matchClients.begin())->getPlayer()->getColor() == PLAYER_WHITE
-									? PLAYER_BLACK
-									: PLAYER_WHITE;
+								try
+								{
+									auto matchID = newMatchID();
+									auto playerID = newPlayerID();
+									auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
 
-								auto clientData = std::make_shared<ClientData>(
-									playerID,
-									createPlayer(color, *matchData->getMatch()),
-									*matchData
-									);
+									auto matchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
 
-								matchData->getClientDataSets().insert(clientData);
+									auto clientData = std::make_shared<ClientData>(
+										playerID,
+										createPlayer(StrToPlayersColor(param["color"].asString()), *matchData->getMatch()),
+										job->first,
+										*matchData
+										);
 
-								auto tmp = clientDataSets.emplace(job->first, clientData);
+									matchData->getClientDataSets().insert(clientData);
 
-								assert(tmp.second);
+									auto tmp1 = clientDataSets.emplace(job->first, clientData);
+									auto tmp2 = matches.emplace(matchID, matchData);
 
-								reply["success"] = true;
-								reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
-								reply["data"]["color"]    = PlayersColorToStr(color);
-								reply["data"]["playerID"] = playerID;
+									// both emplacements must be successful
+									assert(tmp1.second);
+									assert(tmp2.second);
+
+									reply["success"] = true;
+									reply["data"]["matchID"]  = matchID;
+									reply["data"]["playerID"] = playerID;
+								}
+								catch(tntdb::Error& e)
+								{
+									setError(std::string("SQL error: ") + e.what());
+								}
 							}
+							break;
 						}
-						break;
+						case ACTION_JOIN_GAME:
+						{
+							auto it = matches.find(param["matchID"].asString());
+
+							if(clientData)
+								setError("This connection is already in use for a running match");
+							else if(it == matches.end())
+								setError("Game not found");
+							else
+							{
+								auto matchID = param["matchID"].asString();
+								auto playerID = newPlayerID();
+
+								auto matchData = it->second;
+								auto matchClients = matchData->getClientDataSets();
+
+								if(matchClients.size() == 0)
+									setError("You tried to join a game without an active player, this doesn't work yet");
+								else if(matchClients.size() > 1)
+									setError("This game already has two players");
+								else
+								{
+									auto color = (*matchClients.begin())->getPlayer()->getColor() == PLAYER_WHITE
+										? PLAYER_BLACK
+										: PLAYER_WHITE;
+
+									auto clientData = std::make_shared<ClientData>(
+										playerID,
+										createPlayer(color, *matchData->getMatch()),
+										job->first,
+										*matchData
+										);
+
+									matchData->getClientDataSets().insert(clientData);
+
+									auto tmp = clientDataSets.emplace(job->first, clientData);
+
+									assert(tmp.second);
+
+									reply["success"] = true;
+									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
+									reply["data"]["color"]    = PlayersColorToStr(color);
+									reply["data"]["playerID"] = playerID;
+								}
+							}
+							break;
+						}
+						case ACTION_RESUME_GAME:
+							// TODO
+							break;
 					}
-					case ACTION_RESUME_GAME:
-						// TODO
-						break;
+
+					server.send(job->first, writer.write(reply), opcode::text);
+
+					break;
 				}
-
-				server.send(job->first, writer.write(reply), opcode::text);
-
-				break;
-			}
-			case MESSAGE_REPLY:
-			{
-				if(!msgData["success"].asBool())
+				case MESSAGE_REPLY:
 				{
-					msgData["error"] = msgData["error"].asString().empty() ?
-						"The opponents client sent an error message without any detail" :
-						"The opponents client sent the following error message: " + msgData["error"].asString();
+					if(!msgData["success"].asBool())
+					{
+						msgData["error"] = msgData["error"].asString().empty() ?
+							"The opponents client sent an error message without any detail" :
+							"The opponents client sent the following error message: " + msgData["error"].asString();
+					}
+
+					std::string json = writer.write(msgData);
+					for(auto hdl : otherClients)
+						server.send(hdl, json, opcode::text);
+
+					break;
 				}
+				case MESSAGE_GAME_UPDATE:
+				{
+					std::string json = writer.write(msgData);
+					for(auto hdl : otherClients)
+						server.send(hdl, json, opcode::text);
 
-				std::string json = writer.write(msgData);
-				for(auto hdl : otherClients)
-					server.send(hdl, json, opcode::text);
-
-				break;
+					break;
+				}
 			}
-			case MESSAGE_GAME_UPDATE:
-			{
-				std::string json = writer.write(msgData);
-				for(auto hdl : otherClients)
-					server.send(hdl, json, opcode::text);
-
-				break;
-			}
-			default:
-				assert(0);
+		}
+		catch(std::error_code& e)
+		{
+			std::cerr << "Caught a std::error_code\n-----\n" << e << '\n' << e.message() << std::endl;
+		}
+		catch(std::exception& e)
+		{
+			std::cerr << "Caught a std::exception: " << e.what() << std::endl;
+		}
+		catch(...)
+		{
+			std::cerr << "Caught an unrecognized error (not derived from either std::exception or std::error_code)"
+				<< std::endl;
 		}
 	}
 }

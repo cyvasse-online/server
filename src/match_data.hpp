@@ -41,7 +41,11 @@ class MatchData
 		ClientDataSets _clientDataSets;
 
 	public:
-		MatchData(const std::string& id, RuleSet, std::unique_ptr<Match>);
+		MatchData(const std::string& id, RuleSet ruleSet, std::unique_ptr<Match> match)
+			: _id(id)
+			, _ruleSet(ruleSet)
+			, _match(std::move(match))
+		{ }
 
 		const std::string& getID() const
 		{ return _id; }

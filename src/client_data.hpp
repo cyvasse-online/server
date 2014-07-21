@@ -36,7 +36,13 @@ class ClientData
 		MatchData& _matchData;
 
 	public:
-		ClientData(const std::string& id, std::unique_ptr<Player>, MatchData&);
+		ClientData(const std::string& id, std::unique_ptr<Player> player,
+		           websocketpp::connection_hdl hdl, MatchData& matchData)
+			: _id(id)
+			, _player(std::move(player))
+			, _connHdl(hdl)
+			, _matchData(matchData)
+		{ }
 
 		const std::string& getID() const
 		{ return _id; }
