@@ -23,7 +23,6 @@
 namespace cyvdb
 {
 	using cyvmath::RuleSet;
-	using cyvmath::RULE_SET_UNDEFINED;
 
 	struct Match
 	{
@@ -34,7 +33,7 @@ namespace cyvdb
 
 
 		Match(const std::string& argID = std::string(),
-		      RuleSet argRuleSet = RULE_SET_UNDEFINED,
+		      RuleSet argRuleSet = RuleSet::UNDEFINED,
 		      bool argSearchingForPlayer = true)
 			: id{argID}
 			, ruleSet{argRuleSet}
@@ -44,7 +43,7 @@ namespace cyvdb
 		bool valid() const
 		{
 			return id.length() == 4
-				&& ruleSet != RULE_SET_UNDEFINED;
+				&& ruleSet != RuleSet::UNDEFINED;
 		}
 	};
 }

@@ -26,7 +26,7 @@ namespace cyvdb
 	class PlayerManager
 	{
 		private:
-			tntdb::Connection _conn;
+			tntdb::Connection m_conn;
 
 		public:
 			explicit PlayerManager(tntdb::Connection& conn);

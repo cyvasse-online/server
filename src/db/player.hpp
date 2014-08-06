@@ -23,7 +23,6 @@
 namespace cyvdb
 {
 	using cyvmath::PlayersColor;
-	using cyvmath::PLAYER_UNDEFINED;
 
 	class Player : public cyvmath::Player
 	{
@@ -34,7 +33,7 @@ namespace cyvdb
 
 			Player(const std::string& argID = std::string(),
 			       const std::string& argMatchID = std::string(),
-			       PlayersColor argColor = PLAYER_UNDEFINED)
+			       PlayersColor argColor = PlayersColor::UNDEFINED)
 				: cyvmath::Player{argColor}
 				, id{argID}
 				, matchID{argMatchID}
@@ -42,8 +41,8 @@ namespace cyvdb
 
 			bool valid() const
 			{
-				return id.length() == 8
-					&& _color != PLAYER_UNDEFINED;
+				return id.length() == 8 &&
+					m_color != PlayersColor::UNDEFINED;
 			}
 
 			bool setupComplete() override

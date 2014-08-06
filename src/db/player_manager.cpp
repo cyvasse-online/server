@@ -27,11 +27,11 @@ using namespace cyvmath;
 namespace cyvdb
 {
 	PlayerManager::PlayerManager(tntdb::Connection& conn)
-		: _conn(conn)
+		: m_conn(conn)
 	{ }
 
 	PlayerManager::PlayerManager()
-		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
+		: m_conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
 	{ }
 
 	Player PlayerManager::getPlayer(const std::string& playerID)
@@ -39,7 +39,7 @@ namespace cyvdb
 		try
 		{
 			tntdb::Row row =
-				_conn.prepare(
+				m_conn.prepare(
 					"SELECT match, color FROM players "
 					"WHERE player_id = :id"
 				)
@@ -59,7 +59,7 @@ namespace cyvdb
 		if(!player.valid())
 			throw std::invalid_argument("The given Player object is invalid");
 
-		_conn.prepareCached(
+		m_conn.prepareCached(
 			"INSERT INTO players (player_id, match, color) "
 			"VALUES (:id, :match, :color)",
 			"addPlayer" // statement cache key

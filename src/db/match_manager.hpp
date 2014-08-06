@@ -26,7 +26,7 @@ namespace cyvdb
 	class MatchManager
 	{
 		private:
-			tntdb::Connection _conn;
+			tntdb::Connection m_conn;
 
 		public:
 			explicit MatchManager(tntdb::Connection& conn);

@@ -28,11 +28,11 @@ using namespace cyvmath;
 namespace cyvdb
 {
 	MatchManager::MatchManager(tntdb::Connection& conn)
-		: _conn(conn)
+		: m_conn(conn)
 	{ }
 
 	MatchManager::MatchManager()
-		: _conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
+		: m_conn(tntdb::connectCached(DBConfig::glob().getMatchDataUrl()))
 	{ }
 
 	Match MatchManager::getMatch(const std::string& matchID)
@@ -40,7 +40,7 @@ namespace cyvdb
 		try
 		{
 			tntdb::Row row =
-				_conn.prepare(
+				m_conn.prepare(
 					"SELECT rule_set, searching_for_player FROM matches "
 					"WHERE match_id = :id"
 				)
@@ -64,7 +64,7 @@ namespace cyvdb
 
 		try
 		{
-			ruleSetID = _conn.prepareCached(
+			ruleSetID = m_conn.prepareCached(
 				"SELECT rule_set_id "
 				"FROM rule_sets "
 				"WHERE rule_set_str = :ruleSetStr",
@@ -76,7 +76,7 @@ namespace cyvdb
 		}
 		catch(tntdb::NotFound&)
 		{
-			_conn.prepareCached(
+			m_conn.prepareCached(
 				"INSERT INTO rule_sets(rule_set_str) "
 				"VALUES (:ruleSetStr)",
 				"addRuleSet" // cache key
@@ -84,10 +84,10 @@ namespace cyvdb
 				.set("ruleSetStr", RuleSetToStr(match.ruleSet))
 				.execute();
 
-			ruleSetID = _conn.lastInsertId();
+			ruleSetID = m_conn.lastInsertId();
 		}
 
-		_conn.prepareCached(
+		m_conn.prepareCached(
 			"INSERT INTO matches (match_id, rule_set, searching_for_player) "
 			"VALUES (:id, :ruleSetID, :searchingForPlayer)",
 			"addMatch" // cache key

@@ -104,14 +104,14 @@ void JobHandler::processMessages()
 			}
 			else clientDataLock.unlock();
 
-			switch(StrToMessageType(msgData["messageType"].asString()))
+			switch(StrToMessage(msgData["messageType"].asString()))
 			{
-				case MESSAGE_REQUEST:
+				case Message::REQUEST:
 				{
 					auto& param = msgData["param"];
 
 					Json::Value reply;
-					reply["messageType"] = MessageTypeToStr(MESSAGE_REPLY);
+					reply["messageType"] = MessageToStr(Message::REPLY);
 					// cast to int and back to not allow any non-numeral data
 					reply["messageID"] = msgData["messageID"].asInt();
 
@@ -120,9 +120,9 @@ void JobHandler::processMessages()
 							reply["error"] = error;
 						};
 
-					switch(StrToActionType(msgData["action"].asString()))
+					switch(StrToAction(msgData["action"].asString()))
 					{
-						case ACTION_CREATE_GAME:
+						case Action::CREATE_GAME:
 						{
 							if(clientData)
 								setError("This connection is already in use for a running match");
@@ -141,7 +141,7 @@ void JobHandler::processMessages()
 										createPlayer(StrToPlayersColor(param["color"].asString()), *matchData->getMatch()),
 										job->first,
 										*matchData
-										);
+									);
 
 									matchData->getClientDataSets().insert(clientData);
 
@@ -166,7 +166,7 @@ void JobHandler::processMessages()
 							}
 							break;
 						}
-						case ACTION_JOIN_GAME:
+						case Action::JOIN_GAME:
 						{
 							matchDataLock.lock();
 							auto it = matches.find(param["matchID"].asString());
@@ -189,16 +189,14 @@ void JobHandler::processMessages()
 									setError("This game already has two players");
 								else
 								{
-									auto color = (*matchClients.begin())->getPlayer()->getColor() == PLAYER_WHITE
-										? PLAYER_BLACK
-										: PLAYER_WHITE;
+									auto color = !(*matchClients.begin())->getPlayer()->getColor();
 
 									auto clientData = std::make_shared<ClientData>(
 										playerID,
 										createPlayer(color, *matchData->getMatch()),
 										job->first,
 										*matchData
-										);
+									);
 
 									matchData->getClientDataSets().insert(clientData);
 
@@ -218,10 +216,10 @@ void JobHandler::processMessages()
 
 							break;
 						}
-						case ACTION_RESUME_GAME:
+						case Action::RESUME_GAME:
 							// TODO
 							break;
-						case ACTION_CHAT_MSG:
+						case Action::CHAT_MSG:
 							// TODO
 							break;
 						default:
@@ -232,7 +230,7 @@ void JobHandler::processMessages()
 
 					break;
 				}
-				case MESSAGE_REPLY:
+				case Message::REPLY:
 				{
 					if(!msgData["success"].asBool())
 					{
@@ -247,7 +245,7 @@ void JobHandler::processMessages()
 
 					break;
 				}
-				case MESSAGE_GAME_UPDATE:
+				case Message::GAME_UPDATE:
 				{
 					std::string json = writer.write(msgData);
 					for(auto hdl : otherClients)
