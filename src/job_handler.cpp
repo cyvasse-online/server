@@ -220,8 +220,13 @@ void JobHandler::processMessages()
 							// TODO
 							break;
 						case Action::CHAT_MSG:
-							// TODO
+						{
+							std::string json = writer.write(msgData);
+							for(auto hdl : otherClients)
+								server.send(hdl, json, opcode::text);
+
 							break;
+						}
 						default:
 							setError("unrecognized action type");
 					}
