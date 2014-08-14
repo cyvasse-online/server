@@ -209,6 +209,19 @@ void JobHandler::processMessages()
 									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
 									reply["data"]["color"]    = PlayersColorToStr(color);
 									reply["data"]["playerID"] = playerID;
+
+									auto message = PlayersColorToStr(color) + " player joined.";
+									message[0] -= ('a' - 'A'); // lowercase to uppercase
+
+									Json::Value chatMsg;
+									chatMsg["messageType"]      = "request";
+									chatMsg["action"]           = "chat message";
+									chatMsg["param"]["sender"]  = "Server";
+									chatMsg["param"]["message"] = message;
+
+									std::string json = writer.write(chatMsg);
+									for(auto& it : matchClients)
+										server.send(it->getConnHdl(), json, opcode::text);
 								}
 							}
 
