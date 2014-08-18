@@ -37,13 +37,13 @@
 using namespace cyvmath;
 
 JobHandler::JobHandler(CyvasseServer& server)
-	: _server(server)
-	, _thread(std::bind(&JobHandler::processMessages, this))
+	: m_server(server)
+	, m_thread(std::bind(&JobHandler::processMessages, this))
 { }
 
 JobHandler::~JobHandler()
 {
-	_thread.join();
+	m_thread.join();
 }
 
 void JobHandler::processMessages()
@@ -51,25 +51,25 @@ void JobHandler::processMessages()
 	typedef CyvasseServer::Job Job;
 	using namespace websocketpp::frame;
 
-	auto& clientDataSets = _server._clientDataSets;
-	auto& matches = _server._matches;
-	auto& server = _server._wsServer;
+	auto& clientDataSets = m_server.m_clientDataSets;
+	auto& matches = m_server.m_matches;
+	auto& server = m_server.m_wsServer;
 
 	Json::Reader reader;
 	Json::FastWriter writer;
 
-	while(_server._running)
+	while(m_server.m_running)
 	{
-		std::unique_lock<std::mutex> jobLock(_server._jobMtx);
+		std::unique_lock<std::mutex> jobLock(m_server.m_jobMtx);
 
-		while(_server._running && _server._jobQueue.empty())
-			_server._jobCond.wait(jobLock);
+		while(m_server.m_running && m_server.m_jobQueue.empty())
+			m_server.m_jobCond.wait(jobLock);
 
-		if(!_server._running)
+		if(!m_server.m_running)
 			break;
 
-		std::unique_ptr<Job> job = std::move(_server._jobQueue.front());
-		_server._jobQueue.pop();
+		std::unique_ptr<Job> job = std::move(m_server.m_jobQueue.front());
+		m_server.m_jobQueue.pop();
 
 		jobLock.unlock();
 
@@ -87,8 +87,8 @@ void JobHandler::processMessages()
 
 			std::shared_ptr<ClientData> clientData;
 
-			std::unique_lock<std::mutex> matchDataLock(_server._matchDataMtx, std::defer_lock); // don't lock yet
-			std::unique_lock<std::mutex> clientDataLock(_server._clientDataMtx);
+			std::unique_lock<std::mutex> matchDataLock(m_server.m_matchDataMtx, std::defer_lock); // don't lock yet
+			std::unique_lock<std::mutex> clientDataLock(m_server.m_clientDataMtx);
 
 			auto it1 = clientDataSets.find(job->first);
 			if(it1 != clientDataSets.end())
@@ -298,13 +298,13 @@ std::string JobHandler::newMatchID()
 	static std::ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
 
 	std::string res;
-	std::unique_lock<std::mutex> matchDataLock(_server._matchDataMtx);
+	std::unique_lock<std::mutex> matchDataLock(m_server.m_matchDataMtx);
 
 	do
 	{
 		res = int24ToB64ID(int24Generator());
 	}
-	while(_server._matches.find(res) != _server._matches.end());
+	while(m_server.m_matches.find(res) != m_server.m_matches.end());
 
 	matchDataLock.unlock();
 

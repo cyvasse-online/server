@@ -25,9 +25,9 @@ class CyvasseServer;
 struct JobHandler
 {
 	private:
-		CyvasseServer& _server;
+		CyvasseServer& m_server;
 
-		std::thread _thread;
+		std::thread m_thread;
 
 	public:
 		JobHandler(CyvasseServer&);

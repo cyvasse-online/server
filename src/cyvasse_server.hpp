@@ -48,22 +48,22 @@ class CyvasseServer
 		typedef std::pair<websocketpp::connection_hdl, WSServer::message_ptr> Job;
 		typedef std::queue<std::unique_ptr<Job>> JobQueue;
 
-		WSServer _wsServer;
+		WSServer m_wsServer;
 
-		ClientDataMap _clientDataSets;
-		MatchMap _matches;
+		ClientDataMap m_clientDataSets;
+		MatchMap m_matches;
 
-		std::mutex _clientDataMtx;
-		std::mutex _matchDataMtx;
+		std::mutex m_clientDataMtx;
+		std::mutex m_matchDataMtx;
 
-		JobQueue _jobQueue;
+		JobQueue m_jobQueue;
 
-		std::mutex _jobMtx;
-		std::condition_variable _jobCond;
+		std::mutex m_jobMtx;
+		std::condition_variable m_jobCond;
 
-		std::atomic<bool> _running;
+		std::atomic<bool> m_running;
 
-		std::set<std::unique_ptr<JobHandler>> _workers;
+		std::set<std::unique_ptr<JobHandler>> m_workers;
 
 	public:
 		CyvasseServer();

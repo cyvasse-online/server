@@ -34,39 +34,39 @@ class MatchData
 		typedef std::set<ClientDataPtr, std::owner_less<ClientDataPtr>> ClientDataSets;
 
 	private:
-		std::string _id;
-		RuleSet _ruleSet;
-		std::unique_ptr<Match> _match;
+		std::string m_id;
+		RuleSet m_ruleSet;
+		std::unique_ptr<Match> m_match;
 
-		ClientDataSets _clientDataSets;
+		ClientDataSets m_clientDataSets;
 
 	public:
 		MatchData(const std::string& id, RuleSet ruleSet, std::unique_ptr<Match> match)
-			: _id(id)
-			, _ruleSet(ruleSet)
-			, _match(std::move(match))
+			: m_id(id)
+			, m_ruleSet(ruleSet)
+			, m_match(std::move(match))
 		{ }
 
 		const std::string& getID() const
-		{ return _id; }
+		{ return m_id; }
 
 		RuleSet getRuleSet() const
-		{ return _ruleSet; }
+		{ return m_ruleSet; }
 
 		const std::unique_ptr<Match>& getMatch() const
-		{ return _match; }
+		{ return m_match; }
 
 		ClientDataSets& getClientDataSets()
-		{ return _clientDataSets; }
+		{ return m_clientDataSets; }
 
 		const ClientDataSets& getClientDataSets() const
-		{ return _clientDataSets; }
+		{ return m_clientDataSets; }
 
 		bool operator==(const MatchData& other) const
-		{ return _id == other._id; }
+		{ return m_id == other.m_id; }
 
 		bool operator!=(const MatchData& other) const
-		{ return _id != other._id; }
+		{ return m_id != other.m_id; }
 };
 
 #endif // _MATCH_DATA_HPP_
