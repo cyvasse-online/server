@@ -6,11 +6,10 @@ AC_PROG_CXX
 AC_LANG(C++)
 
 AC_CHECK_HEADER([jsoncpp/json/json.h], [], AC_MSG_ERROR([jsoncpp headers not found]))
-AC_CHECK_HEADER([tntdb/connection.h], [], AC_MSG_ERROR([tntdb headers not found]))
 AC_CHECK_HEADER([websocketpp/version.hpp], [], AC_MSG_ERROR([websocket++ headers not found]))
 
 AC_CHECK_FUNCS([sigaction])
 
-AC_CONFIG_SUBDIRS([cyvmath libb64])
+AC_CONFIG_SUBDIRS([cyvasse-common libb64])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
