@@ -16,16 +16,25 @@
 
 #include <exception>
 #include <iostream>
+#include <memory>
 #include <csignal>
+#include <yaml-cpp/yaml.h>
+#include <cyvdb/config.hpp>
+#include <make_unique.hpp> // TODO
 #include "cyvasse_server.hpp"
 
-CyvasseServer* s = nullptr;
+std::unique_ptr<CyvasseServer> server;
 
 extern "C"
 {
 	void stopServer(int /* signal */)
 	{
-		if(s) s->stop();
+		if(server)
+		{
+			server->stop();
+			server.reset();
+		}
+
 		exit(0);
 	}
 }
@@ -62,17 +71,27 @@ int main()
 		signal(SIGTERM, SIG_IGN);
 #endif
 
+	auto config = YAML::LoadFile("config.yml");
+	auto listenPort   = config["listenPort"].as<int>();
+	auto matchDataUrl = config["matchDataUrl"].as<std::string>();
+
+	if(matchDataUrl.empty())
+	{
+		std::cerr << "Error: No database url set!" << std::endl;
+		exit(1);
+	}
+
+	cyvdb::DBConfig::glob().setMatchDataUrl(matchDataUrl);
+
 	try
 	{
-		s = new CyvasseServer;
-		s->run(2516, 1);
+		server = make_unique<CyvasseServer>();
+		server->run(listenPort, 1);
 	}
 	catch(std::exception& e)
 	{
 		std::cerr << e.what() << std::endl;
 	}
-
-	if(s) delete s;
 
 	return 0;
 }

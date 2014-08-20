@@ -23,9 +23,10 @@
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/reader.h>
 #include <jsoncpp/json/writer.h>
-#include <tntdb/connect.h>
 #include <tntdb/error.h>
 #include <server_message.hpp>
+#include <cyvdb/match.hpp>
+#include <cyvdb/match_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
@@ -35,6 +36,7 @@
 #include "match_data.hpp"
 
 using namespace cyvmath;
+using namespace std::chrono;
 
 JobHandler::JobHandler(CyvasseServer& server)
 	: m_server(server)
@@ -128,41 +130,40 @@ void JobHandler::processMessages()
 								setError("This connection is already in use for a running match");
 							else
 							{
-								try
-								{
-									auto matchID = newMatchID();
-									auto playerID = newPlayerID();
-									auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
+								auto matchID  = newMatchID();
+								auto playerID = newPlayerID();
+								auto ruleSet  = StrToRuleSet(param["ruleSet"].asString());
+								auto gameMode = StrToGameMode(param["gameMode"].asString());
 
-									auto newMatchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
+								auto newMatchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
 
-									auto newClientData = std::make_shared<ClientData>(
-										playerID,
-										createPlayer(StrToPlayersColor(param["color"].asString()), *newMatchData->getMatch()),
-										job->first,
-										*newMatchData
-									);
+								auto newClientData = std::make_shared<ClientData>(
+									playerID,
+									createPlayer(StrToPlayersColor(param["color"].asString()), *newMatchData->getMatch()),
+									job->first,
+									*newMatchData
+								);
 
-									newMatchData->getClientDataSets().insert(newClientData);
+								newMatchData->getClientDataSets().insert(newClientData);
 
-									clientDataLock.lock();
-									auto tmp1 = clientDataSets.emplace(job->first, newClientData);
-									clientDataLock.unlock();
-									assert(tmp1.second);
+								clientDataLock.lock();
+								auto tmp1 = clientDataSets.emplace(job->first, newClientData);
+								clientDataLock.unlock();
+								assert(tmp1.second);
 
-									matchDataLock.lock();
-									auto tmp2 = matches.emplace(matchID, newMatchData);
-									matchDataLock.unlock();
-									assert(tmp2.second);
+								matchDataLock.lock();
+								auto tmp2 = matches.emplace(matchID, newMatchData);
+								matchDataLock.unlock();
+								assert(tmp2.second);
 
-									reply["success"] = true;
-									reply["data"]["matchID"]  = matchID;
-									reply["data"]["playerID"] = playerID;
-								}
-								catch(tntdb::Error& e)
-								{
-									setError(std::string("SQL error: ") + e.what());
-								}
+								reply["success"] = true;
+								reply["data"]["matchID"]  = matchID;
+								reply["data"]["playerID"] = playerID;
+
+								std::thread([matchID, ruleSet, gameMode]() {
+									std::this_thread::sleep_for(milliseconds(50));
+									cyvdb::MatchManager().addMatch(cyvdb::Match(matchID, ruleSet, (gameMode == GameMode::RANDOM)));
+								}).detach();
 							}
 							break;
 						}
@@ -291,8 +292,6 @@ void JobHandler::processMessages()
 		}
 	}
 }
-
-using std::chrono::system_clock;
 
 std::string JobHandler::newMatchID()
 {

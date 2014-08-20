@@ -32,4 +32,5 @@ cyvasse_server_LDADD = \
 	-lboost_system \
 	-lcxxtools \
 	-ljsoncpp \
-	-ltntdb
+	-ltntdb \
+	-lyaml-cpp

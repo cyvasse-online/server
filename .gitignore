@@ -13,7 +13,11 @@ config.status
 Makefile
 Makefile.in
 
-# Compiled files
+# config file
+
+config.yml
+
+# compiled files
 
 cyvasse-server
 cyvasse-tests
