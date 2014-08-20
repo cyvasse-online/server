@@ -37,7 +37,8 @@ CyvasseServer::CyvasseServer()
 
 CyvasseServer::~CyvasseServer()
 {
-	if(m_running) stop();
+	if(m_running)
+		stop();
 }
 
 void CyvasseServer::run(uint16_t port, unsigned nWorkers)

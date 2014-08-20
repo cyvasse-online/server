@@ -134,24 +134,24 @@ void JobHandler::processMessages()
 									auto playerID = newPlayerID();
 									auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
 
-									auto matchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
+									auto newMatchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
 
-									auto clientData = std::make_shared<ClientData>(
+									auto newClientData = std::make_shared<ClientData>(
 										playerID,
-										createPlayer(StrToPlayersColor(param["color"].asString()), *matchData->getMatch()),
+										createPlayer(StrToPlayersColor(param["color"].asString()), *newMatchData->getMatch()),
 										job->first,
-										*matchData
+										*newMatchData
 									);
 
-									matchData->getClientDataSets().insert(clientData);
+									newMatchData->getClientDataSets().insert(newClientData);
 
 									clientDataLock.lock();
-									auto tmp1 = clientDataSets.emplace(job->first, clientData);
+									auto tmp1 = clientDataSets.emplace(job->first, newClientData);
 									clientDataLock.unlock();
 									assert(tmp1.second);
 
 									matchDataLock.lock();
-									auto tmp2 = matches.emplace(matchID, matchData);
+									auto tmp2 = matches.emplace(matchID, newMatchData);
 									matchDataLock.unlock();
 									assert(tmp2.second);
 
@@ -169,18 +169,19 @@ void JobHandler::processMessages()
 						case Action::JOIN_GAME:
 						{
 							matchDataLock.lock();
-							auto it = matches.find(param["matchID"].asString());
+
+							auto matchIt = matches.find(param["matchID"].asString());
 
 							if(clientData)
 								setError("This connection is already in use for a running match");
-							else if(it == matches.end())
+							else if(matchIt == matches.end())
 								setError("Game not found");
 							else
 							{
 								auto matchID = param["matchID"].asString();
 								auto playerID = newPlayerID();
 
-								auto matchData = it->second;
+								auto matchData = matchIt->second;
 								auto matchClients = matchData->getClientDataSets();
 
 								if(matchClients.size() == 0)
@@ -191,17 +192,17 @@ void JobHandler::processMessages()
 								{
 									auto color = !(*matchClients.begin())->getPlayer()->getColor();
 
-									auto clientData = std::make_shared<ClientData>(
+									auto newClientData = std::make_shared<ClientData>(
 										playerID,
 										createPlayer(color, *matchData->getMatch()),
 										job->first,
 										*matchData
 									);
 
-									matchData->getClientDataSets().insert(clientData);
+									matchData->getClientDataSets().insert(newClientData);
 
 									clientDataLock.lock();
-									auto tmp = clientDataSets.emplace(job->first, clientData);
+									auto tmp = clientDataSets.emplace(job->first, newClientData);
 									clientDataLock.unlock();
 									assert(tmp.second);
 
@@ -220,8 +221,8 @@ void JobHandler::processMessages()
 									chatMsg["param"]["message"] = message;
 
 									std::string json = writer.write(chatMsg);
-									for(auto& it : matchClients)
-										server.send(it->getConnHdl(), json, opcode::text);
+									for(auto& clientIt : matchClients)
+										server.send(clientIt->getConnHdl(), json, opcode::text);
 								}
 							}
 
