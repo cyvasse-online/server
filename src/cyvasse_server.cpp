@@ -16,9 +16,14 @@
 
 #include "cyvasse_server.hpp"
 
+#include <chrono>
+#include <thread>
+#include <cyvdb/match_manager.hpp>
 #include "client_data.hpp"
 #include "job_handler.hpp"
 #include "match_data.hpp"
+
+using namespace std::chrono;
 
 CyvasseServer::CyvasseServer()
 	: m_running(true)
@@ -98,13 +103,19 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 	{
 		// if this was the last / only player connected
 		// to this match, remove the match completely
+		auto matchID = clientData->getMatchData().getID();
 
 		matchDataLock.lock();
-		auto it3 = m_matches.find(clientData->getMatchData().getID());
-		if(it3 == m_matches.end())
-			return; // or assert this won't happen?
+		auto it3 = m_matches.find(matchID);
+		if(it3 != m_matches.end())
+			m_matches.erase(it3);
 
 		matchDataLock.unlock();
+
+		std::thread([matchID]() {
+			std::this_thread::sleep_for(milliseconds(50));
+			cyvdb::MatchManager().removeMatch(matchID);
+		}).detach();
 	}
 }
 

@@ -179,7 +179,14 @@ void JobHandler::processMessages()
 								setError("Game not found");
 							else
 							{
-								auto matchID = param["matchID"].asString();
+								bool random = param["gameMode"] == "random";
+
+								std::string matchID = random
+									? cyvdb::MatchManager().getOldestRandomModeMatch(
+											StrToRuleSet(param["ruleSet"].asString())
+										).id
+									: param["matchID"].asString();
+
 								auto playerID = newPlayerID();
 
 								auto matchData = matchIt->second;
@@ -208,9 +215,13 @@ void JobHandler::processMessages()
 									assert(tmp.second);
 
 									reply["success"] = true;
-									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
 									reply["data"]["color"]    = PlayersColorToStr(color);
 									reply["data"]["playerID"] = playerID;
+
+									if(random)
+										reply["data"]["matchID"] = matchID;
+									else
+										reply["data"]["ruleSet"] = RuleSetToStr(matchData->getRuleSet());
 
 									auto message = PlayersColorToStr(color) + " player joined.";
 									message[0] -= ('a' - 'A'); // lowercase to uppercase
