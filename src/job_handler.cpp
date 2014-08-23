@@ -99,10 +99,8 @@ void JobHandler::processMessages()
 				clientDataLock.unlock();
 
 				for(auto it2 : clientData->getMatchData().getClientDataSets())
-				{
 					if(*it2 != *clientData)
 						otherClients.insert(it2->getConnHdl());
-				}
 			}
 			else clientDataLock.unlock();
 
@@ -179,7 +177,7 @@ void JobHandler::processMessages()
 								setError("Game not found");
 							else
 							{
-								bool random = param["gameMode"] == "random";
+								bool random = param["random"].asBool();
 
 								std::string matchID = random
 									? cyvdb::MatchManager().getOldestRandomModeMatch(
