@@ -27,6 +27,8 @@
 #include <server_message.hpp>
 #include <cyvdb/match.hpp>
 #include <cyvdb/match_manager.hpp>
+#include <cyvdb/player.hpp>
+#include <cyvdb/player_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
@@ -130,6 +132,7 @@ void JobHandler::processMessages()
 							{
 								auto matchID  = newMatchID();
 								auto playerID = newPlayerID();
+								auto color    = StrToPlayersColor(param["color"].asString());
 								auto ruleSet  = StrToRuleSet(param["ruleSet"].asString());
 								auto gameMode = StrToGameMode(param["gameMode"].asString());
 
@@ -137,7 +140,7 @@ void JobHandler::processMessages()
 
 								auto newClientData = std::make_shared<ClientData>(
 									playerID,
-									createPlayer(StrToPlayersColor(param["color"].asString()), *newMatchData->getMatch()),
+									createPlayer(color, *newMatchData->getMatch()),
 									job->first,
 									*newMatchData
 								);
@@ -158,9 +161,10 @@ void JobHandler::processMessages()
 								reply["data"]["matchID"]  = matchID;
 								reply["data"]["playerID"] = playerID;
 
-								std::thread([matchID, ruleSet, gameMode]() {
+								std::thread([color, ruleSet, gameMode, matchID, playerID]() {
 									std::this_thread::sleep_for(milliseconds(50));
 									cyvdb::MatchManager().addMatch(cyvdb::Match(matchID, ruleSet, (gameMode == GameMode::RANDOM)));
+									cyvdb::PlayerManager().addPlayer(cyvdb::Player(playerID, matchID, color));
 								}).detach();
 							}
 							break;
@@ -177,16 +181,6 @@ void JobHandler::processMessages()
 								setError("Game not found");
 							else
 							{
-								bool random = param["random"].asBool();
-
-								std::string matchID = random
-									? cyvdb::MatchManager().getOldestRandomModeMatch(
-											StrToRuleSet(param["ruleSet"].asString())
-										).id
-									: param["matchID"].asString();
-
-								auto playerID = newPlayerID();
-
 								auto matchData = matchIt->second;
 								auto matchClients = matchData->getClientDataSets();
 
@@ -196,7 +190,9 @@ void JobHandler::processMessages()
 									setError("This game already has two players");
 								else
 								{
-									auto color = !(*matchClients.begin())->getPlayer()->getColor();
+									auto color    = !(*matchClients.begin())->getPlayer()->getColor();
+									auto matchID  = param["matchID"].asString();
+									auto playerID = newPlayerID();
 
 									auto newClientData = std::make_shared<ClientData>(
 										playerID,
@@ -215,11 +211,7 @@ void JobHandler::processMessages()
 									reply["success"] = true;
 									reply["data"]["color"]    = PlayersColorToStr(color);
 									reply["data"]["playerID"] = playerID;
-
-									if(random)
-										reply["data"]["matchID"] = matchID;
-									else
-										reply["data"]["ruleSet"] = RuleSetToStr(matchData->getRuleSet());
+									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
 
 									auto message = PlayersColorToStr(color) + " player joined.";
 									message[0] -= ('a' - 'A'); // lowercase to uppercase
@@ -233,6 +225,11 @@ void JobHandler::processMessages()
 									std::string json = writer.write(chatMsg);
 									for(auto& clientIt : matchClients)
 										server.send(clientIt->getConnHdl(), json, opcode::text);
+
+									std::thread([color, matchID, playerID]() {
+										std::this_thread::sleep_for(milliseconds(50));
+										cyvdb::PlayerManager().addPlayer(cyvdb::Player(playerID, matchID, color));
+									}).detach();
 								}
 							}
 
