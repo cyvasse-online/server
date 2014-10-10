@@ -18,6 +18,8 @@
 
 #include <chrono>
 #include <thread>
+#include <jsoncpp/json/value.h>
+#include <jsoncpp/json/writer.h>
 #include <cyvdb/match_manager.hpp>
 #include "client_data.hpp"
 #include "job_handler.hpp"
@@ -82,6 +84,8 @@ void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message
 
 void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 {
+	using namespace websocketpp::frame;
+
 	std::unique_lock<std::mutex> matchDataLock(m_matchDataMtx, std::defer_lock);
 	std::unique_lock<std::mutex> clientDataLock(m_clientDataMtx);
 
@@ -95,9 +99,21 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 
 	auto& dataSets = clientData->getMatchData().getClientDataSets();
 
-	auto it2 = dataSets.find(clientData);
-	if(it2 != dataSets.end())
-		dataSets.erase(it2);
+	auto color = clientData->getPlayer()->getColor();
+
+	for(auto it2 : dataSets)
+		if(*it2 == *clientData)
+			dataSets.erase(it2);
+		else
+		{
+			Json::Value chatMsg;
+			chatMsg["messageType"]      = "request";
+			chatMsg["action"]           = "chat message";
+			chatMsg["param"]["sender"]  = "Server";
+			chatMsg["param"]["message"] = PlayersColorToPrettyStr(color) + " left.";
+
+			m_wsServer.send(it2->getConnHdl(), Json::FastWriter().write(chatMsg), opcode::text);
+		}
 
 	if(dataSets.empty())
 	{

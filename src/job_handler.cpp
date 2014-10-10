@@ -136,7 +136,9 @@ void JobHandler::processMessages()
 								auto ruleSet  = StrToRuleSet(param["ruleSet"].asString());
 								auto gameMode = StrToGameMode(param["gameMode"].asString());
 
-								auto newMatchData = std::make_shared<MatchData>(matchID, ruleSet, createMatch(ruleSet));
+								auto newMatchData = std::make_shared<MatchData>(
+									matchID, ruleSet, createMatch(ruleSet)
+								);
 
 								auto newClientData = std::make_shared<ClientData>(
 									playerID,
@@ -213,18 +215,14 @@ void JobHandler::processMessages()
 									reply["data"]["playerID"] = playerID;
 									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
 
-									auto message = PlayersColorToStr(color) + " player joined.";
-									message[0] -= ('a' - 'A'); // lowercase to uppercase
-
 									Json::Value chatMsg;
 									chatMsg["messageType"]      = "request";
 									chatMsg["action"]           = "chat message";
 									chatMsg["param"]["sender"]  = "Server";
-									chatMsg["param"]["message"] = message;
+									chatMsg["param"]["message"] = PlayersColorToPrettyStr(color) + " joined.";
 
-									std::string json = writer.write(chatMsg);
 									for(auto& clientIt : matchClients)
-										server.send(clientIt->getConnHdl(), json, opcode::text);
+										server.send(clientIt->getConnHdl(), writer.write(chatMsg), opcode::text);
 
 									std::thread([color, matchID, playerID]() {
 										std::this_thread::sleep_for(milliseconds(50));
