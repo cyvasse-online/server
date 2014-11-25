@@ -99,7 +99,7 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 
 	auto& dataSets = clientData->getMatchData().getClientDataSets();
 
-	auto color = clientData->getPlayer()->getColor();
+	auto color = clientData->getPlayer().getColor();
 
 	for(auto it2 : dataSets)
 		if(*it2 == *clientData)
@@ -119,7 +119,7 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 	{
 		// if this was the last / only player connected
 		// to this match, remove the match completely
-		auto matchID = clientData->getMatchData().getID();
+		auto matchID = clientData->getMatchData().getMatch().getID();
 
 		matchDataLock.lock();
 		auto it3 = m_matches.find(matchID);

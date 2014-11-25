@@ -28,7 +28,6 @@ class MatchData;
 class ClientData
 {
 	private:
-		std::string m_id;
 		std::unique_ptr<Player> m_player;
 
 		websocketpp::connection_hdl m_connHdl;
@@ -36,19 +35,16 @@ class ClientData
 		MatchData& m_matchData;
 
 	public:
-		ClientData(const std::string& id, std::unique_ptr<Player> player,
-		           websocketpp::connection_hdl hdl, MatchData& matchData)
-			: m_id(id)
-			, m_player(std::move(player))
+		ClientData(std::unique_ptr<Player> player, websocketpp::connection_hdl hdl, MatchData& matchData)
+			: m_player(std::move(player))
 			, m_connHdl(hdl)
 			, m_matchData(matchData)
-		{ }
+		{
+			assert(m_player);
+		}
 
-		const std::string& getID() const
-		{ return m_id; }
-
-		const std::unique_ptr<Player>& getPlayer() const
-		{ return m_player; }
+		Player& getPlayer()
+		{ return *m_player; }
 
 		websocketpp::connection_hdl getConnHdl()
 		{ return m_connHdl; }
@@ -56,14 +52,12 @@ class ClientData
 		MatchData& getMatchData()
 		{ return m_matchData; }
 
-		const MatchData& getMatchData() const
-		{ return m_matchData; }
 
 		bool operator==(const ClientData& other) const
-		{ return m_id == other.m_id; }
+		{ return m_player->getID() == other.m_player->getID(); }
 
 		bool operator!=(const ClientData& other) const
-		{ return m_id != other.m_id; }
+		{ return m_player->getID() != other.m_player->getID(); }
 };
 
 #endif // _CLIENT_DATA_HPP_

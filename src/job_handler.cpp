@@ -25,9 +25,7 @@
 #include <jsoncpp/json/writer.h>
 #include <tntdb/error.h>
 #include <server_message.hpp>
-#include <cyvdb/match.hpp>
 #include <cyvdb/match_manager.hpp>
-#include <cyvdb/player.hpp>
 #include <cyvdb/player_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
@@ -136,15 +134,10 @@ void JobHandler::processMessages()
 								auto ruleSet  = StrToRuleSet(param["ruleSet"].asString());
 								auto gameMode = StrToGameMode(param["gameMode"].asString());
 
-								auto newMatchData = std::make_shared<MatchData>(
-									matchID, ruleSet, createMatch(ruleSet)
-								);
-
+								auto newMatchData = std::make_shared<MatchData>(createMatch(ruleSet, matchID));
 								auto newClientData = std::make_shared<ClientData>(
-									playerID,
-									createPlayer(color, *newMatchData->getMatch()),
-									job->first,
-									*newMatchData
+									createPlayer(newMatchData->getMatch(), color, playerID),
+									job->first, *newMatchData
 								);
 
 								newMatchData->getClientDataSets().insert(newClientData);
@@ -163,10 +156,15 @@ void JobHandler::processMessages()
 								reply["data"]["matchID"]  = matchID;
 								reply["data"]["playerID"] = playerID;
 
+								// TODO
 								std::thread([color, ruleSet, gameMode, matchID, playerID]() {
 									std::this_thread::sleep_for(milliseconds(50));
-									cyvdb::MatchManager().addMatch(cyvdb::Match(matchID, ruleSet, (gameMode == GameMode::RANDOM)));
-									cyvdb::PlayerManager().addPlayer(cyvdb::Player(playerID, matchID, color));
+
+									auto match = createMatch(ruleSet, matchID, (gameMode == GameMode::RANDOM));
+									auto player = createPlayer(*match, color, playerID);
+
+									cyvdb::MatchManager().addMatch(std::move(match));
+									cyvdb::PlayerManager().addPlayer(std::move(player));
 								}).detach();
 							}
 							break;
@@ -192,15 +190,14 @@ void JobHandler::processMessages()
 									setError("This game already has two players");
 								else
 								{
-									auto color    = !(*matchClients.begin())->getPlayer()->getColor();
+									auto ruleSet  = matchData->getMatch().getRuleSet();
+									auto color    = !(*matchClients.begin())->getPlayer().getColor();
 									auto matchID  = param["matchID"].asString();
 									auto playerID = newPlayerID();
 
 									auto newClientData = std::make_shared<ClientData>(
-										playerID,
-										createPlayer(color, *matchData->getMatch()),
-										job->first,
-										*matchData
+										createPlayer(matchData->getMatch(), color, playerID),
+										job->first, *matchData
 									);
 
 									matchData->getClientDataSets().insert(newClientData);
@@ -213,7 +210,7 @@ void JobHandler::processMessages()
 									reply["success"] = true;
 									reply["data"]["color"]    = PlayersColorToStr(color);
 									reply["data"]["playerID"] = playerID;
-									reply["data"]["ruleSet"]  = RuleSetToStr(matchData->getRuleSet());
+									reply["data"]["ruleSet"]  = RuleSetToStr(ruleSet);
 
 									Json::Value chatMsg;
 									chatMsg["messageType"]      = "request";
@@ -224,9 +221,12 @@ void JobHandler::processMessages()
 									for(auto& clientIt : matchClients)
 										server.send(clientIt->getConnHdl(), writer.write(chatMsg), opcode::text);
 
-									std::thread([color, matchID, playerID]() {
+									std::thread([ruleSet, color, matchID, playerID]() {
 										std::this_thread::sleep_for(milliseconds(50));
-										cyvdb::PlayerManager().addPlayer(cyvdb::Player(playerID, matchID, color));
+
+										// TODO
+										auto match = createMatch(ruleSet, matchID);
+										cyvdb::PlayerManager().addPlayer(createPlayer(*match, color, playerID));
 									}).detach();
 								}
 							}

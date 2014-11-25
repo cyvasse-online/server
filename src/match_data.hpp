@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <set>
+#include <cassert>
 #include <cyvmath/match.hpp>
 #include <cyvmath/rule_sets.hpp>
 
@@ -34,27 +35,19 @@ class MatchData
 		typedef std::set<ClientDataPtr, std::owner_less<ClientDataPtr>> ClientDataSets;
 
 	private:
-		std::string m_id;
-		RuleSet m_ruleSet;
 		std::unique_ptr<Match> m_match;
 
 		ClientDataSets m_clientDataSets;
 
 	public:
-		MatchData(const std::string& id, RuleSet ruleSet, std::unique_ptr<Match> match)
-			: m_id(id)
-			, m_ruleSet(ruleSet)
-			, m_match(std::move(match))
-		{ }
+		MatchData(std::unique_ptr<Match> match)
+			: m_match(std::move(match))
+		{
+			assert(m_match);
+		}
 
-		const std::string& getID() const
-		{ return m_id; }
-
-		RuleSet getRuleSet() const
-		{ return m_ruleSet; }
-
-		const std::unique_ptr<Match>& getMatch() const
-		{ return m_match; }
+		Match& getMatch()
+		{ return *m_match; }
 
 		ClientDataSets& getClientDataSets()
 		{ return m_clientDataSets; }
@@ -62,11 +55,11 @@ class MatchData
 		const ClientDataSets& getClientDataSets() const
 		{ return m_clientDataSets; }
 
-		bool operator==(const MatchData& other) const
+		/*bool operator==(const MatchData& other) const
 		{ return m_id == other.m_id; }
 
 		bool operator!=(const MatchData& other) const
-		{ return m_id != other.m_id; }
+		{ return m_id != other.m_id; }*/
 };
 
 #endif // _MATCH_DATA_HPP_
