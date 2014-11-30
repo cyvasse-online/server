@@ -24,12 +24,15 @@
 #include <jsoncpp/json/reader.h>
 #include <jsoncpp/json/writer.h>
 #include <tntdb/error.h>
-#include <server_message.hpp>
 #include <cyvdb/match_manager.hpp>
 #include <cyvdb/player_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
+#include <cyvws/game_msg_action.hpp>
+#include <cyvws/msg_type.hpp>
+#include <cyvws/notification_type.hpp>
+#include <cyvws/server_request_action.hpp>
 #include "b64.hpp"
 #include "cyvasse_server.hpp"
 #include "client_data.hpp"
@@ -78,8 +81,8 @@ void JobHandler::processMessages()
 		try
 		{
 			// Process job
-			Json::Value msgData;
-			if(!reader.parse(job->second->get_payload(), msgData, false))
+			Json::Value recvdJson;
+			if(!reader.parse(job->second->get_payload(), recvdJson, false))
 			{
 				// TODO: reply with error message
 				return;
@@ -104,35 +107,61 @@ void JobHandler::processMessages()
 			}
 			else clientDataLock.unlock();
 
-			switch(StrToMessage(msgData["messageType"].asString()))
+			switch(StrToMsgType(recvdJson["msgType"].asString()))
 			{
-				case Message::REQUEST:
+				case MsgType::CHAT_MSG:
+				case MsgType::CHAT_MSG_ACK:
+				case MsgType::GAME_MSG:
+				case MsgType::GAME_MSG_ACK:
+				case MsgType::GAME_MSG_ERR:
 				{
-					auto& param = msgData["param"];
+					// TODO: Does re-creating the Json string
+					// from the Json::Value make sense or should
+					// we just resend the original Json string?
+					std::string json = writer.write(recvdJson);
+					for(auto hdl : otherClients)
+						server.send(hdl, json, opcode::text);
 
+					break;
+				}
+				case MsgType::SERVER_REQUEST:
+				{
 					Json::Value reply;
-					reply["messageType"] = MessageToStr(Message::REPLY);
-					// cast to int and back to not allow any non-numeral data
-					reply["messageID"] = msgData["messageID"].asInt();
 
-					auto setError = [&](const std::string& error) {
-							reply["success"] = false;
-							reply["error"] = error;
+					auto& requestData = recvdJson["requestsData"];
+
+					reply["msgType"] = MsgTypeToStr(MsgType::SERVER_REPLY);
+					// cast to int and back to not allow any non-numeral data
+					reply["msgID"] = recvdJson["msgID"].asInt();
+
+					auto& replyData = reply["replyData"];
+					replyData["success"] = true;
+
+					auto setError = [&replyData](const std::string& error) {
+							replyData["success"] = false;
+							replyData["error"] = error;
 						};
 
-					switch(StrToAction(msgData["action"].asString()))
+					switch(StrToServerRequestAction(requestData["action"].asString()))
 					{
-						case Action::CREATE_GAME:
+						case ServerRequestAction::INIT_COMM:
+						{
+							// TODO
+							break;
+						}
+						case ServerRequestAction::CREATE_GAME:
 						{
 							if(clientData)
 								setError("This connection is already in use for a running match");
 							else
 							{
+								auto ruleSet = StrToRuleSet(requestData["ruleSet"].asString());
+								auto color   = StrToPlayersColor(requestData["color"].asString());
+								auto random  = requestData["random"].asBool();
+								auto _public = requestData["public"].asBool();
+
 								auto matchID  = newMatchID();
 								auto playerID = newPlayerID();
-								auto color    = StrToPlayersColor(param["color"].asString());
-								auto ruleSet  = StrToRuleSet(param["ruleSet"].asString());
-								auto gameMode = StrToGameMode(param["gameMode"].asString());
 
 								auto newMatchData = std::make_shared<MatchData>(createMatch(ruleSet, matchID));
 								auto newClientData = std::make_shared<ClientData>(
@@ -152,15 +181,14 @@ void JobHandler::processMessages()
 								matchDataLock.unlock();
 								assert(tmp2.second);
 
-								reply["success"] = true;
-								reply["data"]["matchID"]  = matchID;
-								reply["data"]["playerID"] = playerID;
+								replyData["matchID"]  = matchID;
+								replyData["playerID"] = playerID;
 
 								// TODO
-								std::thread([color, ruleSet, gameMode, matchID, playerID]() {
+								std::thread([color, ruleSet, random, _public, matchID, playerID]() {
 									std::this_thread::sleep_for(milliseconds(50));
 
-									auto match = createMatch(ruleSet, matchID, (gameMode == GameMode::RANDOM));
+									auto match = createMatch(ruleSet, matchID, random, _public);
 									auto player = createPlayer(*match, color, playerID);
 
 									cyvdb::MatchManager().addMatch(std::move(match));
@@ -169,11 +197,11 @@ void JobHandler::processMessages()
 							}
 							break;
 						}
-						case Action::JOIN_GAME:
+						case ServerRequestAction::JOIN_GAME:
 						{
 							matchDataLock.lock();
 
-							auto matchIt = matches.find(param["matchID"].asString());
+							auto matchIt = matches.find(requestData["matchID"].asString());
 
 							if(clientData)
 								setError("This connection is already in use for a running match");
@@ -192,7 +220,7 @@ void JobHandler::processMessages()
 								{
 									auto ruleSet  = matchData->getMatch().getRuleSet();
 									auto color    = !(*matchClients.begin())->getPlayer().getColor();
-									auto matchID  = param["matchID"].asString();
+									auto matchID  = requestData["matchID"].asString();
 									auto playerID = newPlayerID();
 
 									auto newClientData = std::make_shared<ClientData>(
@@ -207,19 +235,22 @@ void JobHandler::processMessages()
 									clientDataLock.unlock();
 									assert(tmp.second);
 
-									reply["success"] = true;
-									reply["data"]["color"]    = PlayersColorToStr(color);
-									reply["data"]["playerID"] = playerID;
-									reply["data"]["ruleSet"]  = RuleSetToStr(ruleSet);
+									replyData["success"]  = true;
+									replyData["color"]    = PlayersColorToStr(color);
+									replyData["playerID"] = playerID;
+									replyData["ruleSet"]  = RuleSetToStr(ruleSet);
 
-									Json::Value chatMsg;
-									chatMsg["messageType"]      = "request";
-									chatMsg["action"]           = "chat message";
-									chatMsg["param"]["sender"]  = "Server";
-									chatMsg["param"]["message"] = PlayersColorToPrettyStr(color) + " joined.";
+									Json::Value notification;
+									notification["msgType"] = "notification";
+									// TODO: Remove msgID from the examples or use it?
+									auto& notificationData = notification["notificationData"];
+									notificationData["type"] = NotificationTypeToStr(NotificationType::USER_JOINED);
+									//notificationData["screenName"] =
+									//notificationData["registered"] =
+									//notificationData["role"] =
 
 									for(auto& clientIt : matchClients)
-										server.send(clientIt->getConnHdl(), writer.write(chatMsg), opcode::text);
+										server.send(clientIt->getConnHdl(), writer.write(notification), opcode::text);
 
 									std::thread([ruleSet, color, matchID, playerID]() {
 										std::this_thread::sleep_for(milliseconds(50));
@@ -235,48 +266,23 @@ void JobHandler::processMessages()
 
 							break;
 						}
-						case Action::RESUME_GAME:
-							// TODO
-							break;
-						case Action::CHAT_MSG:
+						case ServerRequestAction::SUBSCR_GAME_LIST_UPDATES:
+						case ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES:
 						{
-							std::string json = writer.write(msgData);
-							for(auto hdl : otherClients)
-								server.send(hdl, json, opcode::text);
-
+							// TODO
 							break;
 						}
 						default:
-							setError("unrecognized action type");
+							setError("unrecognized server request action");
 					}
 
 					server.send(job->first, writer.write(reply), opcode::text);
 
 					break;
 				}
-				case Message::REPLY:
-				{
-					if(!msgData["success"].asBool())
-					{
-						msgData["error"] = msgData["error"].asString().empty() ?
-							"The opponents client sent an error message without any detail" :
-							"The opponents client sent the following error message: " + msgData["error"].asString();
-					}
-
-					std::string json = writer.write(msgData);
-					for(auto hdl : otherClients)
-						server.send(hdl, json, opcode::text);
-
-					break;
-				}
-				case Message::GAME_UPDATE:
-				{
-					std::string json = writer.write(msgData);
-					for(auto hdl : otherClients)
-						server.send(hdl, json, opcode::text);
-
-					break;
-				}
+				// case MsgType::NOTIFICATION:
+				// case MsgType::SERVER_REPLY:
+				// case MsgType::UNDEFINED:
 				default: // TODO: reply with error message
 					break;
 			}
