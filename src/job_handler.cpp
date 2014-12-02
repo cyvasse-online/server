@@ -20,9 +20,9 @@
 #include <random>
 #include <set>
 #include <stdexcept>
-#include <jsoncpp/json/value.h>
-#include <jsoncpp/json/reader.h>
-#include <jsoncpp/json/writer.h>
+#include <json/value.h>
+#include <json/reader.h>
+#include <json/writer.h>
 #include <tntdb/error.h>
 #include <cyvdb/match_manager.hpp>
 #include <cyvdb/player_manager.hpp>

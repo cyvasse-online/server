@@ -18,8 +18,8 @@
 
 #include <chrono>
 #include <thread>
-#include <jsoncpp/json/value.h>
-#include <jsoncpp/json/writer.h>
+#include <json/value.h>
+#include <json/writer.h>
 #include <cyvdb/match_manager.hpp>
 #include "client_data.hpp"
 #include "job_handler.hpp"

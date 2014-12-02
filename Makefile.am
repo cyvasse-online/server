@@ -18,6 +18,10 @@ cyvasse_server_CPPFLAGS = \
 	-I$(top_srcdir)/cyvasse-common/include \
 	-I$(top_srcdir)/libb64/include
 
+# workaround for jsoncpp include directory hack in arch linux package
+cyvasse_server_CPPFLAGS += \
+	-I/usr/include/jsoncpp
+
 cyvasse_server_CXXFLAGS = \
 	-std=c++11 \
 	-pthread
