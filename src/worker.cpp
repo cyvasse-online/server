@@ -14,7 +14,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "job_handler.hpp"
+#include "worker.hpp"
 
 #include <chrono>
 #include <random>
@@ -34,47 +34,43 @@
 #include <cyvws/notification_type.hpp>
 #include <cyvws/server_request_action.hpp>
 #include "b64.hpp"
-#include "cyvasse_server.hpp"
 #include "client_data.hpp"
 #include "match_data.hpp"
 
 using namespace cyvmath;
+using namespace cyvws;
+
 using namespace std::chrono;
 
-JobHandler::JobHandler(CyvasseServer& server)
-	: m_server(server)
-	, m_thread(std::bind(&JobHandler::processMessages, this))
+Worker::Worker(SharedServerData& data)
+	: m_data(data)
+	, m_thread(std::bind(&Worker::processMessages, this))
 { }
 
-JobHandler::~JobHandler()
+Worker::~Worker()
 {
 	m_thread.join();
 }
 
-void JobHandler::processMessages()
+void Worker::processMessages()
 {
-	typedef CyvasseServer::Job Job;
 	using namespace websocketpp::frame;
-
-	auto& clientDataSets = m_server.m_clientDataSets;
-	auto& matches = m_server.m_matches;
-	auto& server = m_server.m_wsServer;
 
 	Json::Reader reader;
 	Json::FastWriter writer;
 
-	while(m_server.m_running)
+	while(m_data.running)
 	{
-		std::unique_lock<std::mutex> jobLock(m_server.m_jobMtx);
+		std::unique_lock<std::mutex> jobLock(m_data.jobMtx);
 
-		while(m_server.m_running && m_server.m_jobQueue.empty())
-			m_server.m_jobCond.wait(jobLock);
+		while(m_data.running && m_data.jobQueue.empty())
+			m_data.jobCond.wait(jobLock);
 
-		if(!m_server.m_running)
+		if(!m_data.running)
 			break;
 
-		std::unique_ptr<Job> job = std::move(m_server.m_jobQueue.front());
-		m_server.m_jobQueue.pop();
+		std::unique_ptr<Job> job = std::move(m_data.jobQueue.front());
+		m_data.jobQueue.pop();
 
 		jobLock.unlock();
 
@@ -92,11 +88,11 @@ void JobHandler::processMessages()
 
 			std::shared_ptr<ClientData> clientData;
 
-			std::unique_lock<std::mutex> matchDataLock(m_server.m_matchDataMtx, std::defer_lock); // don't lock yet
-			std::unique_lock<std::mutex> clientDataLock(m_server.m_clientDataMtx);
+			std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx, std::defer_lock); // don't lock yet
+			std::unique_lock<std::mutex> clientDataLock(m_data.clientDataMtx);
 
-			auto it1 = clientDataSets.find(job->first);
-			if(it1 != clientDataSets.end())
+			auto it1 = m_data.clientData.find(job->first);
+			if(it1 != m_data.clientData.end())
 			{
 				clientData = it1->second;
 				clientDataLock.unlock();
@@ -172,7 +168,7 @@ void JobHandler::processMessages()
 								newMatchData->getClientDataSets().insert(newClientData);
 
 								clientDataLock.lock();
-								auto tmp1 = clientDataSets.emplace(job->first, newClientData);
+								auto tmp1 = m_data.clientData.emplace(job->first, newClientData);
 								clientDataLock.unlock();
 								assert(tmp1.second);
 
@@ -231,7 +227,7 @@ void JobHandler::processMessages()
 									matchData->getClientDataSets().insert(newClientData);
 
 									clientDataLock.lock();
-									auto tmp = clientDataSets.emplace(job->first, newClientData);
+									auto tmp = m_data.clientData.emplace(job->first, newClientData);
 									clientDataLock.unlock();
 									assert(tmp.second);
 
@@ -242,7 +238,7 @@ void JobHandler::processMessages()
 
 									Json::Value notification;
 									notification["msgType"] = "notification";
-									// TODO: Remove msgID from the examples or use it?
+
 									auto& notificationData = notification["notificationData"];
 									notificationData["type"] = NotificationTypeToStr(NotificationType::USER_JOINED);
 									//notificationData["screenName"] =
@@ -303,25 +299,25 @@ void JobHandler::processMessages()
 	}
 }
 
-std::string JobHandler::newMatchID()
+std::string Worker::newMatchID()
 {
 	static std::ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
 
 	std::string res;
-	std::unique_lock<std::mutex> matchDataLock(m_server.m_matchDataMtx);
+	std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx);
 
 	do
 	{
 		res = int24ToB64ID(int24Generator());
 	}
-	while(m_server.m_matches.find(res) != m_server.m_matches.end());
+	while(m_data.matchData.find(res) != m_data.matchData.end());
 
 	matchDataLock.unlock();
 
 	return res;
 }
 
-std::string JobHandler::newPlayerID()
+std::string Worker::newPlayerID()
 {
 	static std::ranlux48 int48Generator(system_clock::now().time_since_epoch().count());
 

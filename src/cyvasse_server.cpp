@@ -22,13 +22,12 @@
 #include <json/writer.h>
 #include <cyvdb/match_manager.hpp>
 #include "client_data.hpp"
-#include "job_handler.hpp"
 #include "match_data.hpp"
+#include "worker.hpp"
 
 using namespace std::chrono;
 
 CyvasseServer::CyvasseServer()
-	: m_running(true)
 {
 	using std::placeholders::_1;
 	using std::placeholders::_2;
@@ -44,7 +43,7 @@ CyvasseServer::CyvasseServer()
 
 CyvasseServer::~CyvasseServer()
 {
-	if(m_running)
+	if(m_data.running)
 		stop();
 }
 
@@ -53,7 +52,7 @@ void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 	// start worker threads
 	assert(nWorkers != 0);
 	for(unsigned i = 0; i < nWorkers; i++)
-		m_workers.emplace(new JobHandler(*this));
+		m_workers.emplace(new Worker(m_data));
 
 	// Listen on the specified port
 	m_wsServer.listen(port);
@@ -67,34 +66,34 @@ void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 
 void CyvasseServer::stop()
 {
-	m_running = false;
-	m_jobCond.notify_all();
+	m_data.running = false;
+	m_data.jobCond.notify_all();
 }
 
 void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message_ptr msg)
 {
 	// Queue message up for sending by processing thread
-	std::unique_lock<std::mutex> lock(m_jobMtx);
+	std::unique_lock<std::mutex> lock(m_data.jobMtx);
 
-	m_jobQueue.emplace(new Job(hdl, msg));
+	m_data.jobQueue.emplace(new Job(hdl, msg));
 
 	lock.unlock();
-	m_jobCond.notify_one();
+	m_data.jobCond.notify_one();
 }
 
 void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 {
 	using namespace websocketpp::frame;
 
-	std::unique_lock<std::mutex> matchDataLock(m_matchDataMtx, std::defer_lock);
-	std::unique_lock<std::mutex> clientDataLock(m_clientDataMtx);
+	std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx, std::defer_lock);
+	std::unique_lock<std::mutex> clientDataLock(m_data.clientDataMtx);
 
-	auto it1 = m_clientDataSets.find(hdl);
-	if(it1 == m_clientDataSets.end())
+	auto it1 = m_data.clientData.find(hdl);
+	if(it1 == m_data.clientData.end())
 		return;
 
 	std::shared_ptr<ClientData> clientData = it1->second;
-	m_clientDataSets.erase(it1);
+	m_data.clientData.erase(it1);
 	clientDataLock.unlock();
 
 	auto& dataSets = clientData->getMatchData().getClientDataSets();
@@ -122,9 +121,9 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 		auto matchID = clientData->getMatchData().getMatch().getID();
 
 		matchDataLock.lock();
-		auto it3 = m_matches.find(matchID);
-		if(it3 != m_matches.end())
-			m_matches.erase(it3);
+		auto it3 = m_data.matchData.find(matchID);
+		if(it3 != m_data.matchData.end())
+			m_data.matchData.erase(it3);
 
 		matchDataLock.unlock();
 

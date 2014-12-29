@@ -14,24 +14,23 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _JOB_HANDLER_HPP_
-#define _JOB_HANDLER_HPP_
+#ifndef _WORKER_HPP_
+#define _WORKER_HPP_
 
 #include <string>
 #include <thread>
+#include "shared_server_data.hpp"
 
-class CyvasseServer;
-
-struct JobHandler
+class Worker
 {
 	private:
-		CyvasseServer& m_server;
+		SharedServerData& m_data;
 
 		std::thread m_thread;
 
 	public:
-		JobHandler(CyvasseServer&);
-		~JobHandler();
+		Worker(SharedServerData& data);
+		~Worker();
 
 		// JobHandler main loop
 		void processMessages();
@@ -40,4 +39,4 @@ struct JobHandler
 		std::string newPlayerID();
 };
 
-#endif // _JOB_HANDLER_HPP_
+#endif // _WORKER_HPP_
