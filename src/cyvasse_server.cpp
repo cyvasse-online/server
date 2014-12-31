@@ -49,10 +49,23 @@ CyvasseServer::~CyvasseServer()
 
 void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 {
+	using std::placeholders::_1;
+	using std::placeholders::_2;
+	using std::placeholders::_3;
+
+	// static cast to select the right overload,
+	// std::bind() to bind the m_wsServer object to the functor
+	auto send_func =
+		std::bind(static_cast<void (WSServer::*) (
+			websocketpp::connection_hdl,
+			const std::string&,
+			websocketpp::frame::opcode::value
+		)>(&WSServer::send), &m_wsServer, _1, _2, _3);
+
 	// start worker threads
 	assert(nWorkers != 0);
 	for(unsigned i = 0; i < nWorkers; i++)
-		m_workers.emplace(new Worker(m_data));
+		m_workers.emplace(new Worker(m_data, send_func));
 
 	// Listen on the specified port
 	m_wsServer.listen(port);

@@ -23,13 +23,21 @@
 
 class Worker
 {
+	public:
+		typedef std::function<void(
+				websocketpp::connection_hdl,
+				const std::string&,
+				websocketpp::frame::opcode::value
+			)> send_func_type;
+
 	private:
 		SharedServerData& m_data;
+		send_func_type send;
 
 		std::thread m_thread;
 
 	public:
-		Worker(SharedServerData& data);
+		Worker(SharedServerData& data, send_func_type send_func);
 		~Worker();
 
 		// JobHandler main loop

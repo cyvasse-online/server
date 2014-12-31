@@ -42,9 +42,10 @@ using namespace cyvws;
 
 using namespace std::chrono;
 
-Worker::Worker(SharedServerData& data)
-	: m_data(data)
-	, m_thread(std::bind(&Worker::processMessages, this))
+Worker::Worker(SharedServerData& data, send_func_type send_func)
+	: m_data{data}
+	, send{send_func}
+	, m_thread{std::bind(&Worker::processMessages, this)}
 { }
 
 Worker::~Worker()
@@ -116,7 +117,7 @@ void Worker::processMessages()
 					// we just resend the original Json string?
 					std::string json = writer.write(recvdJson);
 					for(auto hdl : otherClients)
-						server.send(hdl, json, opcode::text);
+						send(hdl, json, opcode::text);
 
 					break;
 				}
@@ -173,7 +174,7 @@ void Worker::processMessages()
 								assert(tmp1.second);
 
 								matchDataLock.lock();
-								auto tmp2 = matches.emplace(matchID, newMatchData);
+								auto tmp2 = m_data.matchData.emplace(matchID, newMatchData);
 								matchDataLock.unlock();
 								assert(tmp2.second);
 
@@ -197,11 +198,11 @@ void Worker::processMessages()
 						{
 							matchDataLock.lock();
 
-							auto matchIt = matches.find(requestData["matchID"].asString());
+							auto matchIt = m_data.matchData.find(requestData["matchID"].asString());
 
 							if(clientData)
 								setError("This connection is already in use for a running match");
-							else if(matchIt == matches.end())
+							else if(matchIt == m_data.matchData.end())
 								setError("Game not found");
 							else
 							{
@@ -246,7 +247,7 @@ void Worker::processMessages()
 									//notificationData["role"] =
 
 									for(auto& clientIt : matchClients)
-										server.send(clientIt->getConnHdl(), writer.write(notification), opcode::text);
+										send(clientIt->getConnHdl(), writer.write(notification), opcode::text);
 
 									std::thread([ruleSet, color, matchID, playerID]() {
 										std::this_thread::sleep_for(milliseconds(50));
@@ -272,7 +273,7 @@ void Worker::processMessages()
 							setError("unrecognized server request action");
 					}
 
-					server.send(job->first, writer.write(reply), opcode::text);
+					send(job->first, writer.write(reply), opcode::text);
 
 					break;
 				}
