@@ -46,7 +46,7 @@ class ClientData
 		Player& getPlayer()
 		{ return *m_player; }
 
-		websocketpp::connection_hdl getConnHdl()
+		websocketpp::connection_hdl getConnHdl() const
 		{ return m_connHdl; }
 
 		MatchData& getMatchData()

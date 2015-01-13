@@ -5,11 +5,12 @@ AM_SILENT_RULES([yes])
 AC_PROG_CXX
 AC_LANG(C++)
 
-AC_CHECK_HEADER([jsoncpp/json/json.h], [], AC_MSG_ERROR([jsoncpp headers not found]))
 AC_CHECK_HEADER([websocketpp/version.hpp], [], AC_MSG_ERROR([websocket++ headers not found]))
 AC_CHECK_HEADER([yaml-cpp/yaml.h], [], AC_MSG_ERROR([yaml-cpp headers not found]))
 
 AC_CHECK_FUNCS([sigaction])
+
+PKG_CHECK_MODULES([JSONCPP], [jsoncpp])
 
 AC_CONFIG_SUBDIRS([cyvasse-common libb64])
 AC_CONFIG_FILES([
