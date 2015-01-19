@@ -27,20 +27,33 @@
 #undef _WEBSOCKETPP_CPP11_STL_
 
 typedef websocketpp::server<websocketpp::config::asio> WSServer;
-typedef std::pair<websocketpp::connection_hdl, WSServer::message_ptr> Job;
 
 class ClientData;
 class MatchData;
 
+struct Job
+{
+    websocketpp::connection_hdl conn_hdl;
+    WSServer::message_ptr msg_ptr;
+
+    Job(websocketpp::connection_hdl connHdl, WSServer::message_ptr msgPtr)
+        : conn_hdl(connHdl)
+        , msg_ptr(msgPtr)
+    { }
+};
+
 struct SharedServerData
 {
+    std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> randomGamesSubscribers;
+    std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> publicGamesSubscribers;
+
     typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>,
                      std::owner_less<websocketpp::connection_hdl>> ClientMap;
     typedef std::map<std::string, std::shared_ptr<MatchData>> MatchMap;
 
     std::atomic_bool running = {true};
 
-    std::queue<std::unique_ptr<Job>> jobQueue;
+    std::queue<Job> jobQueue;
 
     std::mutex jobMtx;
     std::condition_variable jobCond;
@@ -50,8 +63,6 @@ struct SharedServerData
 
     std::mutex clientDataMtx;
     std::mutex matchDataMtx;
-
-    //const WSServer
 };
 
 #endif // _SHARED_SERVER_DATA_HPP_

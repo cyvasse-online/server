@@ -40,12 +40,14 @@
 using namespace cyvmath;
 using namespace cyvws;
 
+using namespace std;
 using namespace std::chrono;
+using namespace websocketpp;
 
-Worker::Worker(SharedServerData& data, send_func_type send_func)
+Worker::Worker(SharedServerData& data, send_func_type sendFunc)
 	: m_data{data}
-	, send{send_func}
-	, m_thread{std::bind(&Worker::processMessages, this)}
+	, m_sendFunc{sendFunc}
+	, m_thread{bind(&Worker::processMessages, this)}
 { }
 
 Worker::~Worker()
@@ -53,16 +55,33 @@ Worker::~Worker()
 	m_thread.join();
 }
 
+void Worker::send(connection_hdl hdl, const string& data)
+{
+	m_sendFunc(hdl, data, frame::opcode::text);
+}
+
+void Worker::send(connection_hdl hdl, const Json::Value& data)
+{
+	send(hdl, Json::FastWriter().write(data));
+}
+
+void Worker::sendCommErr(connection_hdl hdl, const string& errMsg)
+{
+	Json::Value data;
+	data["msgType"] = "notification";
+	data["notificationData"]["type"] = "commError";
+	data["notificationData"]["errMsg"] = errMsg;
+
+	send(hdl, data);
+}
+
 void Worker::processMessages()
 {
-	using namespace websocketpp::frame;
-
 	Json::Reader reader;
-	Json::FastWriter writer;
 
 	while(m_data.running)
 	{
-		std::unique_lock<std::mutex> jobLock(m_data.jobMtx);
+		unique_lock<mutex> jobLock(m_data.jobMtx);
 
 		while(m_data.running && m_data.jobQueue.empty())
 			m_data.jobCond.wait(jobLock);
@@ -70,7 +89,7 @@ void Worker::processMessages()
 		if(!m_data.running)
 			break;
 
-		std::unique_ptr<Job> job = std::move(m_data.jobQueue.front());
+		auto job = m_data.jobQueue.front();
 		m_data.jobQueue.pop();
 
 		jobLock.unlock();
@@ -79,20 +98,20 @@ void Worker::processMessages()
 		{
 			// Process job
 			Json::Value recvdJson;
-			if(!reader.parse(job->second->get_payload(), recvdJson, false))
+			if(!reader.parse(job.msg_ptr->get_payload(), recvdJson, false))
 			{
-				// TODO: reply with error message
-				return;
+				sendCommErr(job.conn_hdl, "Received message is no valid JSON");
+				continue;
 			}
 
-			std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> otherClients;
+			set<connection_hdl, owner_less<connection_hdl>> otherClients;
 
-			std::shared_ptr<ClientData> clientData;
+			shared_ptr<ClientData> clientData;
 
-			std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx, std::defer_lock); // don't lock yet
-			std::unique_lock<std::mutex> clientDataLock(m_data.clientDataMtx);
+			unique_lock<mutex> matchDataLock(m_data.matchDataMtx, defer_lock); // don't lock yet
+			unique_lock<mutex> clientDataLock(m_data.clientDataMtx);
 
-			auto it1 = m_data.clientData.find(job->first);
+			auto it1 = m_data.clientData.find(job.conn_hdl);
 			if(it1 != m_data.clientData.end())
 			{
 				clientData = it1->second;
@@ -115,18 +134,19 @@ void Worker::processMessages()
 					// TODO: Does re-creating the Json string
 					// from the Json::Value make sense or should
 					// we just resend the original Json string?
-					std::string json = writer.write(recvdJson);
+					string json = Json::FastWriter().write(recvdJson);
+
 					for(auto hdl : otherClients)
-						send(hdl, json, opcode::text);
+						send(hdl, json);
 
 					break;
 				}
 				case MsgType::SERVER_REQUEST:
 				{
+					const auto& requestData = recvdJson["requestData"];
+					const auto& param = requestData["param"];
+
 					Json::Value reply;
-
-					auto& requestData = recvdJson["requestsData"];
-
 					reply["msgType"] = MsgTypeToStr(MsgType::SERVER_REPLY);
 					// cast to int and back to not allow any non-numeral data
 					reply["msgID"] = recvdJson["msgID"].asInt();
@@ -134,16 +154,32 @@ void Worker::processMessages()
 					auto& replyData = reply["replyData"];
 					replyData["success"] = true;
 
-					auto setError = [&replyData](const std::string& error) {
-							replyData["success"] = false;
-							replyData["error"] = error;
-						};
+					// g++ warns about the default argument for the lambda with -pedantic,
+					// maybe change how serverReply errors are sent to fix that?
+					auto setError = [&replyData](const string& error, const string& errorDetails = {}) {
+						replyData["success"] = false;
+						replyData["error"] = error;
+						replyData["errorDetails"] = errorDetails;
+					};
 
 					switch(StrToServerRequestAction(requestData["action"].asString()))
 					{
 						case ServerRequestAction::INIT_COMM:
 						{
-							// TODO
+							// TODO: move to somewhere else (probably cyvws)
+							constexpr unsigned short protocolVersionMajor = 1;
+
+							const auto& versionStr = requestData["param"]["protocolVersion"].asString();
+
+							if(versionStr.empty())
+								sendCommErr(job.conn_hdl, "Expected non-empty string value as protocolVersion in initComm");
+							else
+							{
+								if(stoi(versionStr.substr(0, versionStr.find('.'))) != protocolVersionMajor)
+									setError("differingMajorProtVersion", "Expected major protocol version " + to_string(protocolVersionMajor));
+
+								send(job.conn_hdl, reply);
+							}
 							break;
 						}
 						case ServerRequestAction::CREATE_GAME:
@@ -152,24 +188,24 @@ void Worker::processMessages()
 								setError("This connection is already in use for a running match");
 							else
 							{
-								auto ruleSet = StrToRuleSet(requestData["ruleSet"].asString());
-								auto color   = StrToPlayersColor(requestData["color"].asString());
-								auto random  = requestData["random"].asBool();
-								auto _public = requestData["public"].asBool();
+								auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
+								auto color   = StrToPlayersColor(param["color"].asString());
+								auto random  = param["random"].asBool();
+								auto _public = param["public"].asBool();
 
 								auto matchID  = newMatchID();
 								auto playerID = newPlayerID();
 
-								auto newMatchData = std::make_shared<MatchData>(createMatch(ruleSet, matchID));
-								auto newClientData = std::make_shared<ClientData>(
+								auto newMatchData = make_shared<MatchData>(createMatch(ruleSet, matchID));
+								auto newClientData = make_shared<ClientData>(
 									createPlayer(newMatchData->getMatch(), color, playerID),
-									job->first, *newMatchData
+									job.conn_hdl, *newMatchData
 								);
 
 								newMatchData->getClientDataSets().insert(newClientData);
 
 								clientDataLock.lock();
-								auto tmp1 = m_data.clientData.emplace(job->first, newClientData);
+								auto tmp1 = m_data.clientData.emplace(job.conn_hdl, newClientData);
 								clientDataLock.unlock();
 								assert(tmp1.second);
 
@@ -182,16 +218,19 @@ void Worker::processMessages()
 								replyData["playerID"] = playerID;
 
 								// TODO
-								std::thread([color, ruleSet, random, _public, matchID, playerID]() {
-									std::this_thread::sleep_for(milliseconds(50));
+								thread([=] {
+									this_thread::sleep_for(milliseconds(50));
 
 									auto match = createMatch(ruleSet, matchID, random, _public);
 									auto player = createPlayer(*match, color, playerID);
 
-									cyvdb::MatchManager().addMatch(std::move(match));
-									cyvdb::PlayerManager().addPlayer(std::move(player));
+									cyvdb::MatchManager().addMatch(move(match));
+									cyvdb::PlayerManager().addPlayer(move(player));
 								}).detach();
 							}
+
+							send(job.conn_hdl, reply);
+
 							break;
 						}
 						case ServerRequestAction::JOIN_GAME:
@@ -220,15 +259,15 @@ void Worker::processMessages()
 									auto matchID  = requestData["matchID"].asString();
 									auto playerID = newPlayerID();
 
-									auto newClientData = std::make_shared<ClientData>(
+									auto newClientData = make_shared<ClientData>(
 										createPlayer(matchData->getMatch(), color, playerID),
-										job->first, *matchData
+										job.conn_hdl, *matchData
 									);
 
 									matchData->getClientDataSets().insert(newClientData);
 
 									clientDataLock.lock();
-									auto tmp = m_data.clientData.emplace(job->first, newClientData);
+									auto tmp = m_data.clientData.emplace(job.conn_hdl, newClientData);
 									clientDataLock.unlock();
 									assert(tmp.second);
 
@@ -246,11 +285,15 @@ void Worker::processMessages()
 									//notificationData["registered"] =
 									//notificationData["role"] =
 
-									for(auto& clientIt : matchClients)
-										send(clientIt->getConnHdl(), writer.write(notification), opcode::text);
+									auto&& msg = Json::FastWriter().write(notification);
 
-									std::thread([ruleSet, color, matchID, playerID]() {
-										std::this_thread::sleep_for(milliseconds(50));
+									for(auto& clientIt : matchClients)
+										send(clientIt->getConnHdl(), msg);
+
+									send(job.conn_hdl, reply);
+
+									thread([=] {
+										this_thread::sleep_for(milliseconds(50));
 
 										// TODO
 										auto match = createMatch(ruleSet, matchID);
@@ -264,48 +307,88 @@ void Worker::processMessages()
 							break;
 						}
 						case ServerRequestAction::SUBSCR_GAME_LIST_UPDATES:
+						{
+							// ignore param["ruleSet"] for now
+							for (const auto& list : param["lists"])
+							{
+								const auto& listName = list.asString();
+
+								if (listName == "openRandomGames")
+									m_data.randomGamesSubscribers.insert(job.conn_hdl);
+								else if (listName == "runningPublicGames")
+									m_data.publicGamesSubscribers.insert(job.conn_hdl);
+								//else
+									// send error message
+							}
+						}
 						case ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES:
 						{
-							// TODO
+							// ignore param["ruleSet"] for now
+							for (const auto& list : param["lists"])
+							{
+								const auto& listName = list.asString();
+
+								if (listName == "openRandomGames")
+								{
+									const auto& it = m_data.randomGamesSubscribers.find(job.conn_hdl);
+
+									if(it != m_data.randomGamesSubscribers.end())
+										m_data.randomGamesSubscribers.erase(job.conn_hdl);
+								}
+								else if (listName == "runningPublicGames")
+								{
+									const auto& it = m_data.publicGamesSubscribers.find(job.conn_hdl);
+
+									if(it != m_data.publicGamesSubscribers.end())
+										m_data.publicGamesSubscribers.erase(job.conn_hdl);
+								}
+								//else
+								//{
+								//	send error message
+								//}
+							}
 							break;
 						}
 						default:
-							setError("unrecognized server request action");
+							sendCommErr(job.conn_hdl, "Unrecognized server request action");
 					}
-
-					send(job->first, writer.write(reply), opcode::text);
 
 					break;
 				}
-				// case MsgType::NOTIFICATION:
-				// case MsgType::SERVER_REPLY:
-				// case MsgType::UNDEFINED:
-				default: // TODO: reply with error message
+				case MsgType::NOTIFICATION:
+				case MsgType::SERVER_REPLY:
+					sendCommErr(job.conn_hdl, "This msgType is not intended for client-to-server messages");
+					break;
+				case MsgType::UNDEFINED:
+					sendCommErr(job.conn_hdl, "No valid msgType found");
+					break;
+				default:
+					// MsgType enum value valid, implementation lacks support for some feature
+					assert(0);
 					break;
 			}
 		}
 		catch(std::error_code& e)
 		{
-			std::cerr << "Caught a std::error_code\n-----\n" << e << '\n' << e.message() << std::endl;
+			cerr << "Caught a std::error_code\n-----\n" << e << '\n' << e.message() << endl;
 		}
 		catch(std::exception& e)
 		{
-			std::cerr << "Caught a std::exception: " << e.what() << std::endl;
+			cerr << "Caught a std::exception: " << e.what() << endl;
 		}
 		catch(...)
 		{
-			std::cerr << "Caught an unrecognized error (not derived from either std::exception or std::error_code)"
-				<< std::endl;
+			cerr << "Caught an unrecognized error (not derived from either exception or error_code)" << endl;
 		}
 	}
 }
 
-std::string Worker::newMatchID()
+string Worker::newMatchID()
 {
-	static std::ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
+	static ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
 
-	std::string res;
-	std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx);
+	string res;
+	unique_lock<mutex> matchDataLock(m_data.matchDataMtx);
 
 	do
 	{
@@ -318,9 +401,9 @@ std::string Worker::newMatchID()
 	return res;
 }
 
-std::string Worker::newPlayerID()
+string Worker::newPlayerID()
 {
-	static std::ranlux48 int48Generator(system_clock::now().time_since_epoch().count());
+	static ranlux48 int48Generator(system_clock::now().time_since_epoch().count());
 
 	// TODO
 	return int48ToB64ID(int48Generator());

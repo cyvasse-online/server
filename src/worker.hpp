@@ -19,6 +19,7 @@
 
 #include <string>
 #include <thread>
+#include <json/value.h>
 #include "shared_server_data.hpp"
 
 class Worker
@@ -32,12 +33,17 @@ class Worker
 
 	private:
 		SharedServerData& m_data;
-		send_func_type send;
+		send_func_type m_sendFunc;
 
 		std::thread m_thread;
 
+		void send(websocketpp::connection_hdl, const std::string&);
+		void send(websocketpp::connection_hdl, const Json::Value&);
+
+		void sendCommErr(websocketpp::connection_hdl, const std::string& errMsg);
+
 	public:
-		Worker(SharedServerData& data, send_func_type send_func);
+		Worker(SharedServerData& data, send_func_type sendFunc);
 		~Worker();
 
 		// JobHandler main loop

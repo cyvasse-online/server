@@ -88,7 +88,7 @@ void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message
 	// Queue message up for sending by processing thread
 	std::unique_lock<std::mutex> lock(m_data.jobMtx);
 
-	m_data.jobQueue.emplace(new Job(hdl, msg));
+	m_data.jobQueue.emplace(hdl, msg);
 
 	lock.unlock();
 	m_data.jobCond.notify_one();
