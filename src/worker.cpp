@@ -159,7 +159,9 @@ void Worker::processMessages()
 					auto setError = [&replyData](const string& error, const string& errorDetails = {}) {
 						replyData["success"] = false;
 						replyData["error"] = error;
-						replyData["errorDetails"] = errorDetails;
+
+						if(!errorDetails.empty())
+							replyData["errorDetails"] = errorDetails;
 					};
 
 					switch(StrToServerRequestAction(requestData["action"].asString()))
@@ -185,7 +187,7 @@ void Worker::processMessages()
 						case ServerRequestAction::CREATE_GAME:
 						{
 							if(clientData)
-								setError("This connection is already in use for a running match");
+								setError("connInUse");
 							else
 							{
 								auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
@@ -240,18 +242,18 @@ void Worker::processMessages()
 							auto matchIt = m_data.matchData.find(requestData["matchID"].asString());
 
 							if(clientData)
-								setError("This connection is already in use for a running match");
+								setError("connInUse");
 							else if(matchIt == m_data.matchData.end())
-								setError("Game not found");
+								setError("gameNotFound");
 							else
 							{
 								auto matchData = matchIt->second;
 								auto matchClients = matchData->getClientDataSets();
 
 								if(matchClients.size() == 0)
-									setError("You tried to join a game without an active player, this doesn't work yet");
+									setError("gameEmpty");
 								else if(matchClients.size() > 1)
-									setError("This game already has two players");
+									setError("gameFull");
 								else
 								{
 									auto ruleSet  = matchData->getMatch().getRuleSet();
@@ -303,6 +305,8 @@ void Worker::processMessages()
 							}
 
 							matchDataLock.unlock();
+
+							send(job.conn_hdl, reply);
 
 							break;
 						}
