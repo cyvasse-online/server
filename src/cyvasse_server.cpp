@@ -25,20 +25,22 @@
 #include "match_data.hpp"
 #include "worker.hpp"
 
+using namespace std;
 using namespace std::chrono;
+using namespace websocketpp;
 
 CyvasseServer::CyvasseServer()
 {
-	using std::placeholders::_1;
-	using std::placeholders::_2;
+	using placeholders::_1;
+	using placeholders::_2;
 
 	// Initialize Asio Transport
 	m_wsServer.init_asio();
 
 	// Register handler callback
-	m_wsServer.set_message_handler(std::bind(&CyvasseServer::onMessage, this, _1, _2));
-	m_wsServer.set_close_handler(std::bind(&CyvasseServer::onClose, this, _1));
-	//m_wsServer.set_http_handler(std::bind(&CyvasseServer::onHttpRequest, this, _1));
+	m_wsServer.set_message_handler(bind(&CyvasseServer::onMessage, this, _1, _2));
+	m_wsServer.set_close_handler(bind(&CyvasseServer::onClose, this, _1));
+	//m_wsServer.set_http_handler(bind(&CyvasseServer::onHttpRequest, this, _1));
 }
 
 CyvasseServer::~CyvasseServer()
@@ -49,18 +51,15 @@ CyvasseServer::~CyvasseServer()
 
 void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 {
-	using std::placeholders::_1;
-	using std::placeholders::_2;
-	using std::placeholders::_3;
+	using placeholders::_1;
+	using placeholders::_2;
+	using placeholders::_3;
 
 	// static cast to select the right overload,
-	// std::bind() to bind the m_wsServer object to the functor
+	// bind() to bind the m_wsServer object to the functor
 	auto send_func =
-		std::bind(static_cast<void (WSServer::*) (
-			websocketpp::connection_hdl,
-			const std::string&,
-			websocketpp::frame::opcode::value
-		)>(&WSServer::send), &m_wsServer, _1, _2, _3);
+		bind(static_cast<void (WSServer::*) (connection_hdl, const string&, frame::opcode::value)>(&WSServer::send),
+			&m_wsServer, _1, _2, _3);
 
 	// start worker threads
 	assert(nWorkers != 0);
@@ -83,10 +82,10 @@ void CyvasseServer::stop()
 	m_data.jobCond.notify_all();
 }
 
-void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message_ptr msg)
+void CyvasseServer::onMessage(connection_hdl hdl, WSServer::message_ptr msg)
 {
 	// Queue message up for sending by processing thread
-	std::unique_lock<std::mutex> lock(m_data.jobMtx);
+	unique_lock<mutex> lock(m_data.jobMtx);
 
 	m_data.jobQueue.emplace(hdl, msg);
 
@@ -94,18 +93,16 @@ void CyvasseServer::onMessage(websocketpp::connection_hdl hdl, WSServer::message
 	m_data.jobCond.notify_one();
 }
 
-void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
+void CyvasseServer::onClose(connection_hdl hdl)
 {
-	using namespace websocketpp::frame;
-
-	std::unique_lock<std::mutex> matchDataLock(m_data.matchDataMtx, std::defer_lock);
-	std::unique_lock<std::mutex> clientDataLock(m_data.clientDataMtx);
+	unique_lock<mutex> matchDataLock(m_data.matchDataMtx, defer_lock);
+	unique_lock<mutex> clientDataLock(m_data.clientDataMtx);
 
 	auto it1 = m_data.clientData.find(hdl);
 	if(it1 == m_data.clientData.end())
 		return;
 
-	std::shared_ptr<ClientData> clientData = it1->second;
+	shared_ptr<ClientData> clientData = it1->second;
 	m_data.clientData.erase(it1);
 	clientDataLock.unlock();
 
@@ -124,7 +121,7 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 			chatMsg["param"]["sender"]  = "Server";
 			chatMsg["param"]["message"] = PlayersColorToPrettyStr(color) + " left.";
 
-			m_wsServer.send(it2->getConnHdl(), Json::FastWriter().write(chatMsg), opcode::text);
+			m_wsServer.send(it2->getConnHdl(), Json::FastWriter().write(chatMsg), frame::opcode::text);
 		}
 
 	if(dataSets.empty())
@@ -140,14 +137,14 @@ void CyvasseServer::onClose(websocketpp::connection_hdl hdl)
 
 		matchDataLock.unlock();
 
-		std::thread([matchID]() {
-			std::this_thread::sleep_for(milliseconds(50));
+		thread([matchID]() {
+			this_thread::sleep_for(milliseconds(50));
 			cyvdb::MatchManager().removeMatch(matchID);
 		}).detach();
 	}
 }
 
-void CyvasseServer::onHttpRequest(websocketpp::connection_hdl)
+void CyvasseServer::onHttpRequest(connection_hdl)
 {
 	// TODO: send 301 moved permanently -> domain:80
 }

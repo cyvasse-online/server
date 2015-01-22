@@ -23,7 +23,9 @@
 #include <make_unique.hpp> // TODO
 #include "cyvasse_server.hpp"
 
-std::unique_ptr<CyvasseServer> server;
+using namespace std;
+
+unique_ptr<CyvasseServer> server;
 
 extern "C"
 {
@@ -73,11 +75,11 @@ int main()
 
 	auto config = YAML::LoadFile("config.yml");
 	auto listenPort   = config["listenPort"].as<int>();
-	auto matchDataUrl = config["matchDataUrl"].as<std::string>();
+	auto matchDataUrl = config["matchDataUrl"].as<string>();
 
 	if(matchDataUrl.empty())
 	{
-		std::cerr << "Error: No database url set!" << std::endl;
+		cerr << "Error: No database url set!" << endl;
 		exit(1);
 	}
 
@@ -90,7 +92,7 @@ int main()
 	}
 	catch(std::exception& e)
 	{
-		std::cerr << e.what() << std::endl;
+		cerr << e.what() << endl;
 	}
 
 	return 0;
