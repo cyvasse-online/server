@@ -25,7 +25,7 @@ nohup.out
 # compiled files
 
 cyvasse-server
-cyvasse-tests
+cyvmath-tests
 
 base64
 c-example1
