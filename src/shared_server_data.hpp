@@ -33,36 +33,41 @@ class MatchData;
 
 struct Job
 {
-    websocketpp::connection_hdl conn_hdl;
-    WSServer::message_ptr msg_ptr;
+	websocketpp::connection_hdl conn_hdl;
+	WSServer::message_ptr msg_ptr;
 
-    Job(websocketpp::connection_hdl connHdl, WSServer::message_ptr msgPtr)
-        : conn_hdl(connHdl)
-        , msg_ptr(msgPtr)
-    { }
+	Job(websocketpp::connection_hdl connHdl, WSServer::message_ptr msgPtr)
+		: conn_hdl(connHdl)
+		, msg_ptr(msgPtr)
+	{ }
 };
 
 struct SharedServerData
 {
-    std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> randomGamesSubscribers;
-    std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>> publicGamesSubscribers;
+	typedef std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>>
+		ConnectionSet;
 
-    typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>,
-                     std::owner_less<websocketpp::connection_hdl>> ClientMap;
-    typedef std::map<std::string, std::shared_ptr<MatchData>> MatchMap;
+	typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>, std::owner_less<websocketpp::connection_hdl>>
+		ClientMap;
 
-    std::atomic_bool running = {true};
+	typedef std::map<std::string, std::shared_ptr<MatchData>>
+		MatchMap;
 
-    std::queue<Job> jobQueue;
+	std::atomic_bool running = {true};
 
-    std::mutex jobMtx;
-    std::condition_variable jobCond;
+	std::queue<Job> jobQueue;
 
-    ClientMap clientData;
-    MatchMap matchData;
+	std::mutex jobMtx;
+	std::condition_variable jobCond;
 
-    std::mutex clientDataMtx;
-    std::mutex matchDataMtx;
+	ClientMap clientData;
+	MatchMap matchData;
+
+	std::mutex clientDataMtx;
+	std::mutex matchDataMtx;
+
+	ConnectionSet randomGamesSubscribers;
+	ConnectionSet publicGamesSubscribers;
 };
 
 #endif // _SHARED_SERVER_DATA_HPP_

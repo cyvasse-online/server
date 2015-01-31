@@ -27,18 +27,15 @@ using namespace std;
 
 unique_ptr<CyvasseServer> server;
 
-extern "C"
+extern "C" void stopServer(int /* signal */)
 {
-	void stopServer(int /* signal */)
+	if(server)
 	{
-		if(server)
-		{
-			server->stop();
-			server.reset();
-		}
-
-		exit(0);
+		server->stop();
+		server.reset();
 	}
+
+	exit(0);
 }
 
 int main()

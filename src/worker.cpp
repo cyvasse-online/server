@@ -24,8 +24,8 @@
 #include <json/reader.h>
 #include <json/writer.h>
 #include <tntdb/error.h>
-#include <cyvdb/match_manager.hpp>
-#include <cyvdb/player_manager.hpp>
+//#include <cyvdb/match_manager.hpp>
+//#include <cyvdb/player_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
@@ -187,7 +187,10 @@ void Worker::processMessages()
 						case ServerRequestAction::CREATE_GAME:
 						{
 							if(clientData)
+							{
 								setError("connInUse");
+								send(job.conn_hdl, reply);
+							}
 							else
 							{
 								auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
@@ -197,6 +200,8 @@ void Worker::processMessages()
 
 								auto matchID  = newMatchID();
 								auto playerID = newPlayerID();
+
+								// TODO: Check whether all necessary parameters are set and valid
 
 								auto newMatchData = make_shared<MatchData>(createMatch(ruleSet, matchID));
 								auto newClientData = make_shared<ClientData>(
@@ -219,8 +224,13 @@ void Worker::processMessages()
 								replyData["matchID"]  = matchID;
 								replyData["playerID"] = playerID;
 
+								send(job.conn_hdl, reply);
+
+								// TODO: Update randomGames / publicGames lists and
+								// send a notification to the corresponding subscribers
+
 								// TODO
-								thread([=] {
+								/*thread([=] {
 									this_thread::sleep_for(milliseconds(50));
 
 									auto match = createMatch(ruleSet, matchID, random, _public);
@@ -228,10 +238,8 @@ void Worker::processMessages()
 
 									cyvdb::MatchManager().addMatch(move(match));
 									cyvdb::PlayerManager().addPlayer(move(player));
-								}).detach();
+								}).detach();*/
 							}
-
-							send(job.conn_hdl, reply);
 
 							break;
 						}
@@ -294,13 +302,13 @@ void Worker::processMessages()
 
 									send(job.conn_hdl, reply);
 
-									thread([=] {
+									/*thread([=] {
 										this_thread::sleep_for(milliseconds(50));
 
 										// TODO
 										auto match = createMatch(ruleSet, matchID);
 										cyvdb::PlayerManager().addPlayer(createPlayer(*match, color, playerID));
-									}).detach();
+									}).detach();*/
 								}
 							}
 

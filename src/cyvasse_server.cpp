@@ -20,7 +20,7 @@
 #include <thread>
 #include <json/value.h>
 #include <json/writer.h>
-#include <cyvdb/match_manager.hpp>
+//#include <cyvdb/match_manager.hpp>
 #include "client_data.hpp"
 #include "match_data.hpp"
 #include "worker.hpp"
@@ -137,10 +137,10 @@ void CyvasseServer::onClose(connection_hdl hdl)
 
 		matchDataLock.unlock();
 
-		thread([matchID]() {
+		/*thread([=]() {
 			this_thread::sleep_for(milliseconds(50));
 			cyvdb::MatchManager().removeMatch(matchID);
-		}).detach();
+		}).detach();*/
 	}
 }
 
