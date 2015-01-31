@@ -46,7 +46,7 @@ int main()
 	// setup sigaction struct for stopServer
 	newAction.sa_handler = stopServer;
 	sigemptyset(&newAction.sa_mask);
-    newAction.sa_flags = 0;
+	newAction.sa_flags = 0;
 
 	sigaction(SIGHUP, nullptr, &oldAction);
 	if(oldAction.sa_handler != SIG_IGN)

@@ -21,6 +21,8 @@
 #include <json/value.h>
 #include <json/writer.h>
 //#include <cyvdb/match_manager.hpp>
+#include <cyvws/msg_type.hpp>
+#include <cyvws/notification_type.hpp>
 #include "client_data.hpp"
 #include "match_data.hpp"
 #include "worker.hpp"
@@ -28,6 +30,8 @@
 using namespace std;
 using namespace std::chrono;
 using namespace websocketpp;
+
+using namespace cyvws;
 
 CyvasseServer::CyvasseServer()
 {
@@ -51,20 +55,10 @@ CyvasseServer::~CyvasseServer()
 
 void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 {
-	using placeholders::_1;
-	using placeholders::_2;
-	using placeholders::_3;
-
-	// static cast to select the right overload,
-	// bind() to bind the m_wsServer object to the functor
-	auto send_func =
-		bind(static_cast<void (WSServer::*) (connection_hdl, const string&, frame::opcode::value)>(&WSServer::send),
-			&m_wsServer, _1, _2, _3);
-
 	// start worker threads
 	assert(nWorkers != 0);
 	for(unsigned i = 0; i < nWorkers; i++)
-		m_workers.emplace(new Worker(m_data, send_func));
+		m_workers.emplace(new Worker(*this, m_data));
 
 	// Listen on the specified port
 	m_wsServer.listen(port);
@@ -115,13 +109,11 @@ void CyvasseServer::onClose(connection_hdl hdl)
 			dataSets.erase(it2);
 		else
 		{
-			Json::Value chatMsg;
-			chatMsg["messageType"]      = "request";
-			chatMsg["action"]           = "chat message";
-			chatMsg["param"]["sender"]  = "Server";
-			chatMsg["param"]["message"] = PlayersColorToPrettyStr(color) + " left.";
+			Json::Value notificationData;
+			notificationData["type"] = NotificationTypeToStr(NotificationType::USER_LEFT);
+			// TODO
 
-			m_wsServer.send(it2->getConnHdl(), Json::FastWriter().write(chatMsg), frame::opcode::text);
+			sendNotification(it2->getConnHdl(), notificationData);
 		}
 
 	if(dataSets.empty())
@@ -147,4 +139,73 @@ void CyvasseServer::onClose(connection_hdl hdl)
 void CyvasseServer::onHttpRequest(connection_hdl)
 {
 	// TODO: send 301 moved permanently -> domain:80
+}
+
+void CyvasseServer::send(connection_hdl hdl, const string& data)
+{
+	m_wsServer.send(hdl, data, frame::opcode::text);
+}
+
+void CyvasseServer::send(connection_hdl hdl, const Json::Value& data)
+{
+	send(hdl, Json::FastWriter().write(data));
+}
+
+void CyvasseServer::sendCommErr(connection_hdl hdl, const string& errMsg)
+{
+	Json::Value msg;
+	msg["msgType"] = "notification";
+	msg["notificationData"]["type"]   = "commError";
+	msg["notificationData"]["errMsg"] = errMsg;
+
+	send(hdl, msg);
+}
+
+void CyvasseServer::sendReply(connection_hdl hdl, unsigned msgID, const Json::Value& replyData)
+{
+	Json::Value msg;
+	msg["msgType"]   = MsgTypeToStr(MsgType::SERVER_REPLY);
+	msg["msgID"]     = msgID;
+	msg["replyData"] = replyData;
+
+	send(hdl, msg);
+}
+
+void CyvasseServer::sendNotification(connection_hdl hdl, const Json::Value& notificationData)
+{
+	Json::Value msg;
+	msg["msgType"] = MsgTypeToStr(MsgType::NOTIFICATION);
+	msg["notificationData"] = notificationData;
+
+	send(hdl, msg);
+}
+
+void CyvasseServer::sendRequestErr(connection_hdl hdl, unsigned msgID, const string& error, const string& errorDetails)
+{
+	Json::Value replyData;
+	replyData["success"] = false;
+	replyData["error"]   = error;
+
+	if(!errorDetails.empty())
+		replyData["errorDetails"] = errorDetails;
+
+	sendReply(hdl, msgID, replyData);
+}
+
+void CyvasseServer::sendInitCommSuccess(connection_hdl hdl, unsigned msgID)
+{
+	Json::Value replyData;
+	replyData["success"] = true;
+
+	sendReply(hdl, msgID, replyData);
+}
+
+void CyvasseServer::sendCreateGameSuccess(connection_hdl hdl, unsigned msgID, const string& matchID, const string& playerID)
+{
+	Json::Value replyData;
+	replyData["success"]  = true;
+	replyData["matchID"]  = matchID;
+	replyData["playerID"] = playerID;
+
+	sendReply(hdl, msgID, replyData);
 }

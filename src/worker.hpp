@@ -22,35 +22,38 @@
 #include <json/value.h>
 #include "shared_server_data.hpp"
 
+class CyvasseServer;
+
+class ClientData;
+
 class Worker
 {
-	public:
-		typedef std::function<void(
-				websocketpp::connection_hdl,
-				const std::string&,
-				websocketpp::frame::opcode::value
-			)> send_func_type;
-
 	private:
+		CyvasseServer& m_server;
 		SharedServerData& m_data;
-		send_func_type m_sendFunc;
 
 		std::thread m_thread;
 
-		void send(websocketpp::connection_hdl, const std::string&);
-		void send(websocketpp::connection_hdl, const Json::Value&);
+		unsigned m_curMsgID;
 
-		void sendCommErr(websocketpp::connection_hdl, const std::string& errMsg);
+		std::shared_ptr<ClientData> getClientData(websocketpp::connection_hdl);
+
+		std::string newMatchID();
+		std::string newPlayerID();
 
 	public:
-		Worker(SharedServerData& data, send_func_type sendFunc);
+		Worker(CyvasseServer&, SharedServerData& data);
 		~Worker();
 
 		// JobHandler main loop
 		void processMessages();
 
-		std::string newMatchID();
-		std::string newPlayerID();
+		void processServerRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& recvdJson);
+		void processInitCommRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
+		void processCreateGameRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
+		void processJoinGameRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
+		void processSubscrGameListRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
+		void processUnsubscrGameListRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
 };
 
 #endif // _WORKER_HPP_
