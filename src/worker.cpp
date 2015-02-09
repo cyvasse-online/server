@@ -36,6 +36,7 @@
 #include <cyvws/notification.hpp>
 #include <cyvws/server_reply.hpp>
 #include <cyvws/server_request.hpp>
+#include <cyvws/json_server_reply.hpp>
 #include "cyvasse_server.hpp"
 #include "b64.hpp"
 #include "client_data.hpp"
@@ -223,18 +224,18 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 	{
 		if (stoi(versionStr.substr(0, versionStr.find('.'))) != protocolVersionMajor)
 		{
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::DIFF_MAJOR_PROT_V,
-				"Expected major protocol version " + to_string(protocolVersionMajor));
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::DIFF_MAJOR_PROT_V,
+				"Expected major protocol version " + to_string(protocolVersionMajor)));
 		}
 
-		m_server.sendInitCommSuccess(clientConnHdl, m_curMsgID);
+		m_server.send(clientConnHdl, json::initCommSuccess(m_curMsgID));
 	}
 }
 
 void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
 	if (getClientData(clientConnHdl))
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::CONN_IN_USE);
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
 	else
 	{
 		auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
@@ -267,7 +268,7 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 			assert(tmp.second);
 		}
 
-		m_server.sendCreateGameSuccess(clientConnHdl, m_curMsgID, matchID, playerID);
+		m_server.send(clientConnHdl, json::createGameSuccess(m_curMsgID, matchID, playerID));
 
 		// TODO: Update randomGames / publicGames lists and
 		// send a notification to the corresponding subscribers
@@ -292,18 +293,18 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 	auto matchIt = m_data.matchData.find(param[MATCH_ID].asString());
 
 	if (getClientData(clientConnHdl))
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::CONN_IN_USE);
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
 	else if (matchIt == m_data.matchData.end())
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_NOT_FOUND);
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_NOT_FOUND));
 	else
 	{
 		auto matchData = matchIt->second;
 		auto matchClients = matchData->getClientDataSets();
 
 		if (matchClients.size() == 0)
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_EMPTY);
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_EMPTY));
 		else if (matchClients.size() > 1)
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_FULL);
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_FULL));
 		else
 		{
 			auto ruleSet  = matchData->getMatch().getRuleSet();
@@ -331,15 +332,15 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			replyData[PLAYER_ID] = playerID;
 			replyData[RULE_SET]  = RuleSetToStr(ruleSet);
 
-			m_server.sendReply(clientConnHdl, m_curMsgID, replyData);
+			m_server.send(clientConnHdl, json::serverReply(m_curMsgID, replyData));
 
 			Json::Value notification;
 			notification[MSG_TYPE] = MsgType::NOTIFICATION;
 
 			auto& notificationData = notification[NOTIFICATION_DATA];
 			notificationData[TYPE] = NotificationType::USER_JOINED;
-			//notificationData[SCREEN_NAME] =
-			//notificationData[REGISTERED] =
+			notificationData[REGISTERED]  = false;
+			notificationData[SCREEN_NAME] = "User"; // TODO
 			//notificationData[ROLE] =
 
 			auto&& msg = Json::FastWriter().write(notification);
@@ -370,7 +371,7 @@ void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Js
 		else if (listName == GameList::RUNNING_PUBLIC_GAMES)
 			m_data.publicGamesSubscribers.insert(clientConnHdl);
 		else
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST);
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
 	}
 }
 
@@ -396,6 +397,6 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 				m_data.publicGamesSubscribers.erase(clientConnHdl);
 		}
 		else
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST);
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
 	}
 }

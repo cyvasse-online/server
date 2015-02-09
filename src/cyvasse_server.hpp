@@ -51,14 +51,7 @@ class CyvasseServer
 		void send(websocketpp::connection_hdl, const Json::Value&);
 
 		void sendCommErr(websocketpp::connection_hdl, const std::string& errMsg);
-		void sendReply(websocketpp::connection_hdl, unsigned msgID, const Json::Value& replyData);
 		void sendNotification(websocketpp::connection_hdl, const Json::Value& notificationData);
-
-		void sendRequestErr(websocketpp::connection_hdl, unsigned msgID,
-		                    const std::string& error, const std::string& errorDetails = {});
-		void sendInitCommSuccess(websocketpp::connection_hdl, unsigned msgID);
-		void sendCreateGameSuccess(websocketpp::connection_hdl hdl, unsigned msgID,
-		                           const std::string& matchID, const std::string& playerID);
 };
 
 #endif // _CYVASSE_SERVER_HPP_

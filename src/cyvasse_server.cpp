@@ -25,6 +25,7 @@
 #include <cyvws/msg.hpp>
 #include <cyvws/notification.hpp>
 #include <cyvws/server_reply.hpp>
+#include <cyvws/json_server_reply.hpp>
 #include "client_data.hpp"
 #include "match_data.hpp"
 #include "worker.hpp"
@@ -163,16 +164,6 @@ void CyvasseServer::sendCommErr(connection_hdl hdl, const string& errMsg)
 	send(hdl, msg);
 }
 
-void CyvasseServer::sendReply(connection_hdl hdl, unsigned msgID, const Json::Value& replyData)
-{
-	Json::Value msg;
-	msg[MSG_TYPE]   = MsgType::SERVER_REPLY;
-	msg[MSG_ID]     = msgID;
-	msg[REPLY_DATA] = replyData;
-
-	send(hdl, msg);
-}
-
 void CyvasseServer::sendNotification(connection_hdl hdl, const Json::Value& notificationData)
 {
 	Json::Value msg;
@@ -180,34 +171,4 @@ void CyvasseServer::sendNotification(connection_hdl hdl, const Json::Value& noti
 	msg[NOTIFICATION_DATA] = notificationData;
 
 	send(hdl, msg);
-}
-
-void CyvasseServer::sendRequestErr(connection_hdl hdl, unsigned msgID, const string& error, const string& errDetails)
-{
-	Json::Value replyData;
-	replyData[SUCCESS] = false;
-	replyData[ERR_MSG] = error;
-
-	if (!errDetails.empty())
-		replyData[ERR_DETAILS] = errDetails;
-
-	sendReply(hdl, msgID, replyData);
-}
-
-void CyvasseServer::sendInitCommSuccess(connection_hdl hdl, unsigned msgID)
-{
-	Json::Value replyData;
-	replyData[SUCCESS] = true;
-
-	sendReply(hdl, msgID, replyData);
-}
-
-void CyvasseServer::sendCreateGameSuccess(connection_hdl hdl, unsigned msgID, const string& matchID, const string& playerID)
-{
-	Json::Value replyData;
-	replyData[SUCCESS]   = true;
-	replyData[MATCH_ID]  = matchID;
-	replyData[PLAYER_ID] = playerID;
-
-	sendReply(hdl, msgID, replyData);
 }
