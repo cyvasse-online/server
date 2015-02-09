@@ -29,10 +29,13 @@
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
-#include <cyvws/game_msg_action.hpp>
-#include <cyvws/msg_type.hpp>
-#include <cyvws/notification_type.hpp>
-#include <cyvws/server_request_action.hpp>
+#include <cyvws/common.hpp>
+#include <cyvws/game_msg.hpp>
+#include <cyvws/init_comm.hpp>
+#include <cyvws/msg.hpp>
+#include <cyvws/notification.hpp>
+#include <cyvws/server_reply.hpp>
+#include <cyvws/server_request.hpp>
 #include "cyvasse_server.hpp"
 #include "b64.hpp"
 #include "client_data.hpp"
@@ -64,7 +67,7 @@ shared_ptr<ClientData> Worker::getClientData(connection_hdl hdl)
 	lock_guard<mutex> clientDataLock(m_data.clientDataMtx);
 
 	auto it1 = m_data.clientData.find(hdl);
-	if(it1 != m_data.clientData.end())
+	if (it1 != m_data.clientData.end())
 		ret = it1->second;
 
 	return ret;
@@ -105,7 +108,7 @@ void Worker::processMessages()
 		while(m_data.running && m_data.jobQueue.empty())
 			m_data.jobCond.wait(jobLock);
 
-		if(!m_data.running)
+		if (!m_data.running)
 			break;
 
 		auto job = m_data.jobQueue.front();
@@ -119,66 +122,57 @@ void Worker::processMessages()
 			const Json::Value recvdJson = [&] {
 				Json::Value ret;
 
-				if(!reader.parse(job.msg_ptr->get_payload(), ret, false))
+				if (!reader.parse(job.msg_ptr->get_payload(), ret, false))
 					m_server.sendCommErr(job.conn_hdl, "Received message is no valid JSON");
 
 				return ret;
 			}();
 
-			if(recvdJson.isNull())
+			if (recvdJson.isNull())
 				continue;
 
-			if(!recvdJson["msgID"].isNull())
-				m_curMsgID = recvdJson["msgID"].asUInt();
+			if (!recvdJson[MSG_ID].isNull())
+				m_curMsgID = recvdJson[MSG_ID].asUInt();
 
-			switch(StrToMsgType(recvdJson["msgType"].asString()))
+			const auto& msgType = recvdJson[MSG_TYPE].asString();
+
+			if (msgType == MsgType::CHAT_MSG ||
+				msgType == MsgType::CHAT_MSG_ACK ||
+				msgType == MsgType::GAME_MSG ||
+				msgType == MsgType::GAME_MSG_ACK ||
+				msgType == MsgType::GAME_MSG_ERR)
 			{
-				case MsgType::CHAT_MSG:
-				case MsgType::CHAT_MSG_ACK:
-				case MsgType::GAME_MSG:
-				case MsgType::GAME_MSG_ACK:
-				case MsgType::GAME_MSG_ERR:
+				auto clientData = getClientData(job.conn_hdl);
+
+				if (clientData)
 				{
-					auto clientData = getClientData(job.conn_hdl);
+					set<connection_hdl, owner_less<connection_hdl>> otherClients;
 
-					if(clientData)
+					for (auto it2 : clientData->getMatchData().getClientDataSets())
+						if (*it2 != *clientData)
+							otherClients.insert(it2->getConnHdl());
+
+					if (!otherClients.empty())
 					{
-						set<connection_hdl, owner_less<connection_hdl>> otherClients;
+						// TODO: Does re-creating the Json string
+						// from the Json::Value make sense or should
+						// we just resend the original Json string?
+						string json = Json::FastWriter().write(recvdJson);
 
-						for(auto it2 : clientData->getMatchData().getClientDataSets())
-							if(*it2 != *clientData)
-								otherClients.insert(it2->getConnHdl());
-
-						if(!otherClients.empty())
-						{
-							// TODO: Does re-creating the Json string
-							// from the Json::Value make sense or should
-							// we just resend the original Json string?
-							string json = Json::FastWriter().write(recvdJson);
-
-							for(auto&& hdl : otherClients)
-								m_server.send(hdl, json);
-						}
+						for (auto&& hdl : otherClients)
+							m_server.send(hdl, json);
 					}
-					// else?
-
-					break;
 				}
-				case MsgType::SERVER_REQUEST:
-					processServerRequest(job.conn_hdl, recvdJson);
-					break;
-				case MsgType::NOTIFICATION:
-				case MsgType::SERVER_REPLY:
-					m_server.sendCommErr(job.conn_hdl, "This msgType is not intended for client-to-server messages");
-					break;
-				case MsgType::UNDEFINED:
-					m_server.sendCommErr(job.conn_hdl, "No valid msgType found");
-					break;
-				default:
-					// MsgType enum value valid, implementation lacks support for some feature
-					assert(0);
-					break;
+				// else?
+
+				break;
 			}
+			else if (msgType == MsgType::SERVER_REQUEST)
+				processServerRequest(job.conn_hdl, recvdJson);
+			else if (msgType ==  MsgType::NOTIFICATION || msgType == MsgType::SERVER_REPLY)
+				m_server.sendCommErr(job.conn_hdl, "This msgType is not intended for client-to-server messages");
+			else
+				m_server.sendCommErr(job.conn_hdl, "msgType \"" + msgType + "\" is invalid");
 		}
 		catch(std::error_code& e)
 		{
@@ -197,28 +191,23 @@ void Worker::processMessages()
 
 void Worker::processServerRequest(connection_hdl clientConnHdl, const Json::Value& recvdJson)
 {
-	const auto& requestData = recvdJson["requestData"];
+	const auto& requestData = recvdJson[REQUEST_DATA];
 
-	switch(StrToServerRequestAction(requestData["action"].asString()))
-	{
-		case ServerRequestAction::INIT_COMM:
-			processInitCommRequest(clientConnHdl, requestData["param"]);
-			break;
-		case ServerRequestAction::CREATE_GAME:
-			processCreateGameRequest(clientConnHdl, requestData["param"]);
-			break;
-		case ServerRequestAction::JOIN_GAME:
-			processJoinGameRequest(clientConnHdl, requestData["param"]);
-			break;
-		case ServerRequestAction::SUBSCR_GAME_LIST_UPDATES:
-			processSubscrGameListRequest(clientConnHdl, requestData["param"]);
-			break;
-		case ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES:
-			processUnsubscrGameListRequest(clientConnHdl, requestData["param"]);
-			break;
-		default:
-			m_server.sendCommErr(clientConnHdl, "Unrecognized server request action");
-	}
+	const auto& action = requestData[ACTION].asString();
+	const auto& param  = requestData[PARAM];
+
+	if(action == ServerRequestAction::INIT_COMM)
+		processInitCommRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::CREATE_GAME)
+		processCreateGameRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::JOIN_GAME)
+		processJoinGameRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::SUBSCR_GAME_LIST_UPDATES)
+		processSubscrGameListRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES)
+		processUnsubscrGameListRequest(clientConnHdl, param);
+	else
+		m_server.sendCommErr(clientConnHdl, "Unrecognized server request action");
 }
 
 void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Value& param)
@@ -226,15 +215,15 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 	// TODO: move to somewhere else (probably cyvws)
 	constexpr unsigned short protocolVersionMajor = 1;
 
-	const auto& versionStr = param["protocolVersion"].asString();
+	const auto& versionStr = param[PROTOCOL_VERSION].asString();
 
-	if(versionStr.empty())
+	if (versionStr.empty())
 		m_server.sendCommErr(clientConnHdl, "Expected non-empty string value as protocolVersion in initComm");
 	else
 	{
-		if(stoi(versionStr.substr(0, versionStr.find('.'))) != protocolVersionMajor)
+		if (stoi(versionStr.substr(0, versionStr.find('.'))) != protocolVersionMajor)
 		{
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, "differingMajorProtVersion",
+			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::DIFF_MAJOR_PROT_V,
 				"Expected major protocol version " + to_string(protocolVersionMajor));
 		}
 
@@ -244,14 +233,14 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 
 void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
-	if(getClientData(clientConnHdl))
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, "connInUse");
+	if (getClientData(clientConnHdl))
+		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::CONN_IN_USE);
 	else
 	{
-		auto ruleSet = StrToRuleSet(param["ruleSet"].asString());
-		auto color   = StrToPlayersColor(param["color"].asString());
-		auto random  = param["random"].asBool();
-		auto _public = param["public"].asBool();
+		auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
+		auto color   = StrToPlayersColor(param[COLOR].asString());
+		auto random  = param[RANDOM].asBool();
+		auto _public = param[PUBLIC].asBool();
 
 		auto matchID  = newMatchID();
 		auto playerID = newPlayerID();
@@ -300,26 +289,26 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 {
 	unique_lock<mutex> matchDataLock(m_data.matchDataMtx);
 
-	auto matchIt = m_data.matchData.find(param["matchID"].asString());
+	auto matchIt = m_data.matchData.find(param[MATCH_ID].asString());
 
-	if(getClientData(clientConnHdl))
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, "connInUse");
-	else if(matchIt == m_data.matchData.end())
-		m_server.sendRequestErr(clientConnHdl, m_curMsgID, "gameNotFound");
+	if (getClientData(clientConnHdl))
+		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::CONN_IN_USE);
+	else if (matchIt == m_data.matchData.end())
+		m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_NOT_FOUND);
 	else
 	{
 		auto matchData = matchIt->second;
 		auto matchClients = matchData->getClientDataSets();
 
-		if(matchClients.size() == 0)
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, "gameEmpty");
-		else if(matchClients.size() > 1)
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, "gameFull");
+		if (matchClients.size() == 0)
+			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_EMPTY);
+		else if (matchClients.size() > 1)
+			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::GAME_FULL);
 		else
 		{
 			auto ruleSet  = matchData->getMatch().getRuleSet();
 			auto color    = !(*matchClients.begin())->getPlayer().getColor();
-			auto matchID  = param["matchID"].asString();
+			auto matchID  = param[MATCH_ID].asString();
 			auto playerID = newPlayerID();
 
 			auto clientData = make_shared<ClientData>(
@@ -337,25 +326,25 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			}
 
 			Json::Value replyData;
-			replyData["success"]  = true;
-			replyData["color"]    = PlayersColorToStr(color);
-			replyData["playerID"] = playerID;
-			replyData["ruleSet"]  = RuleSetToStr(ruleSet);
+			replyData[SUCCESS]   = true;
+			replyData[COLOR]     = PlayersColorToStr(color);
+			replyData[PLAYER_ID] = playerID;
+			replyData[RULE_SET]  = RuleSetToStr(ruleSet);
 
 			m_server.sendReply(clientConnHdl, m_curMsgID, replyData);
 
 			Json::Value notification;
-			notification["msgType"] = "notification";
+			notification[MSG_TYPE] = MsgType::NOTIFICATION;
 
-			auto& notificationData = notification["notificationData"];
-			notificationData["type"] = NotificationTypeToStr(NotificationType::USER_JOINED);
-			//notificationData["screenName"] =
-			//notificationData["registered"] =
-			//notificationData["role"] =
+			auto& notificationData = notification[NOTIFICATION_DATA];
+			notificationData[TYPE] = NotificationType::USER_JOINED;
+			//notificationData[SCREEN_NAME] =
+			//notificationData[REGISTERED] =
+			//notificationData[ROLE] =
 
 			auto&& msg = Json::FastWriter().write(notification);
 
-			for(auto& clientIt : matchClients)
+			for (auto& clientIt : matchClients)
 				m_server.send(clientIt->getConnHdl(), msg);
 
 			/*thread([=] {
@@ -372,41 +361,41 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
 	// ignore param["ruleSet"] for now
-	for (const auto& list : param["lists"])
+	for (const auto& list : param[LISTS])
 	{
 		const auto& listName = list.asString();
 
-		if (listName == "openRandomGames")
+		if (listName == GameList::OPEN_RANDOM_GAMES)
 			m_data.randomGamesSubscribers.insert(clientConnHdl);
-		else if (listName == "runningPublicGames")
+		else if (listName == GameList::RUNNING_PUBLIC_GAMES)
 			m_data.publicGamesSubscribers.insert(clientConnHdl);
 		else
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, "listDoesNotExist");
+			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST);
 	}
 }
 
 void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
 	// ignore param["ruleSet"] for now
-	for (const auto& list : param["lists"])
+	for (const auto& list : param[LISTS])
 	{
 		const auto& listName = list.asString();
 
-		if (listName == "openRandomGames")
+		if (listName == GameList::OPEN_RANDOM_GAMES)
 		{
 			const auto& it = m_data.randomGamesSubscribers.find(clientConnHdl);
 
-			if(it != m_data.randomGamesSubscribers.end())
+			if (it != m_data.randomGamesSubscribers.end())
 				m_data.randomGamesSubscribers.erase(clientConnHdl);
 		}
-		else if (listName == "runningPublicGames")
+		else if (listName == GameList::OPEN_RANDOM_GAMES)
 		{
 			const auto& it = m_data.publicGamesSubscribers.find(clientConnHdl);
 
-			if(it != m_data.publicGamesSubscribers.end())
+			if (it != m_data.publicGamesSubscribers.end())
 				m_data.publicGamesSubscribers.erase(clientConnHdl);
 		}
 		else
-			m_server.sendRequestErr(clientConnHdl, m_curMsgID, "listDoesNotExist");
+			m_server.sendRequestErr(clientConnHdl, m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST);
 	}
 }

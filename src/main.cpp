@@ -89,7 +89,7 @@ int main()
 	}
 	catch(std::exception& e)
 	{
-		cerr << e.what() << endl;
+		cerr << "server exception: " << e.what() << endl;
 	}
 
 	return 0;

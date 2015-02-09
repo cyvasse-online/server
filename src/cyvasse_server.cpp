@@ -21,8 +21,10 @@
 #include <json/value.h>
 #include <json/writer.h>
 //#include <cyvdb/match_manager.hpp>
-#include <cyvws/msg_type.hpp>
-#include <cyvws/notification_type.hpp>
+#include <cyvws/common.hpp>
+#include <cyvws/msg.hpp>
+#include <cyvws/notification.hpp>
+#include <cyvws/server_reply.hpp>
 #include "client_data.hpp"
 #include "match_data.hpp"
 #include "worker.hpp"
@@ -49,7 +51,7 @@ CyvasseServer::CyvasseServer()
 
 CyvasseServer::~CyvasseServer()
 {
-	if(m_data.running)
+	if (m_data.running)
 		stop();
 }
 
@@ -57,7 +59,7 @@ void CyvasseServer::run(uint16_t port, unsigned nWorkers)
 {
 	// start worker threads
 	assert(nWorkers != 0);
-	for(unsigned i = 0; i < nWorkers; i++)
+	for (unsigned i = 0; i < nWorkers; i++)
 		m_workers.emplace(new Worker(*this, m_data));
 
 	// Listen on the specified port
@@ -93,7 +95,7 @@ void CyvasseServer::onClose(connection_hdl hdl)
 	unique_lock<mutex> clientDataLock(m_data.clientDataMtx);
 
 	auto it1 = m_data.clientData.find(hdl);
-	if(it1 == m_data.clientData.end())
+	if (it1 == m_data.clientData.end())
 		return;
 
 	shared_ptr<ClientData> clientData = it1->second;
@@ -104,19 +106,19 @@ void CyvasseServer::onClose(connection_hdl hdl)
 
 	auto color = clientData->getPlayer().getColor();
 
-	for(auto it2 : dataSets)
-		if(*it2 == *clientData)
+	for (auto it2 : dataSets)
+		if (*it2 == *clientData)
 			dataSets.erase(it2);
 		else
 		{
 			Json::Value notificationData;
-			notificationData["type"] = NotificationTypeToStr(NotificationType::USER_LEFT);
+			notificationData[TYPE] = NotificationType::USER_LEFT;
 			// TODO
 
 			sendNotification(it2->getConnHdl(), notificationData);
 		}
 
-	if(dataSets.empty())
+	if (dataSets.empty())
 	{
 		// if this was the last / only player connected
 		// to this match, remove the match completely
@@ -124,7 +126,7 @@ void CyvasseServer::onClose(connection_hdl hdl)
 
 		matchDataLock.lock();
 		auto it3 = m_data.matchData.find(matchID);
-		if(it3 != m_data.matchData.end())
+		if (it3 != m_data.matchData.end())
 			m_data.matchData.erase(it3);
 
 		matchDataLock.unlock();
@@ -154,9 +156,9 @@ void CyvasseServer::send(connection_hdl hdl, const Json::Value& data)
 void CyvasseServer::sendCommErr(connection_hdl hdl, const string& errMsg)
 {
 	Json::Value msg;
-	msg["msgType"] = "notification";
-	msg["notificationData"]["type"]   = "commError";
-	msg["notificationData"]["errMsg"] = errMsg;
+	msg[MSG_TYPE] = MsgType::NOTIFICATION;
+	msg[NOTIFICATION_DATA][TYPE]    = NotificationType::COMM_ERROR;
+	msg[NOTIFICATION_DATA][ERR_MSG] = errMsg;
 
 	send(hdl, msg);
 }
@@ -164,9 +166,9 @@ void CyvasseServer::sendCommErr(connection_hdl hdl, const string& errMsg)
 void CyvasseServer::sendReply(connection_hdl hdl, unsigned msgID, const Json::Value& replyData)
 {
 	Json::Value msg;
-	msg["msgType"]   = MsgTypeToStr(MsgType::SERVER_REPLY);
-	msg["msgID"]     = msgID;
-	msg["replyData"] = replyData;
+	msg[MSG_TYPE]   = MsgType::SERVER_REPLY;
+	msg[MSG_ID]     = msgID;
+	msg[REPLY_DATA] = replyData;
 
 	send(hdl, msg);
 }
@@ -174,20 +176,20 @@ void CyvasseServer::sendReply(connection_hdl hdl, unsigned msgID, const Json::Va
 void CyvasseServer::sendNotification(connection_hdl hdl, const Json::Value& notificationData)
 {
 	Json::Value msg;
-	msg["msgType"] = MsgTypeToStr(MsgType::NOTIFICATION);
-	msg["notificationData"] = notificationData;
+	msg[MSG_TYPE] = MsgType::NOTIFICATION;
+	msg[NOTIFICATION_DATA] = notificationData;
 
 	send(hdl, msg);
 }
 
-void CyvasseServer::sendRequestErr(connection_hdl hdl, unsigned msgID, const string& error, const string& errorDetails)
+void CyvasseServer::sendRequestErr(connection_hdl hdl, unsigned msgID, const string& error, const string& errDetails)
 {
 	Json::Value replyData;
-	replyData["success"] = false;
-	replyData["error"]   = error;
+	replyData[SUCCESS] = false;
+	replyData[ERR_MSG] = error;
 
-	if(!errorDetails.empty())
-		replyData["errorDetails"] = errorDetails;
+	if (!errDetails.empty())
+		replyData[ERR_DETAILS] = errDetails;
 
 	sendReply(hdl, msgID, replyData);
 }
@@ -195,7 +197,7 @@ void CyvasseServer::sendRequestErr(connection_hdl hdl, unsigned msgID, const str
 void CyvasseServer::sendInitCommSuccess(connection_hdl hdl, unsigned msgID)
 {
 	Json::Value replyData;
-	replyData["success"] = true;
+	replyData[SUCCESS] = true;
 
 	sendReply(hdl, msgID, replyData);
 }
@@ -203,9 +205,9 @@ void CyvasseServer::sendInitCommSuccess(connection_hdl hdl, unsigned msgID)
 void CyvasseServer::sendCreateGameSuccess(connection_hdl hdl, unsigned msgID, const string& matchID, const string& playerID)
 {
 	Json::Value replyData;
-	replyData["success"]  = true;
-	replyData["matchID"]  = matchID;
-	replyData["playerID"] = playerID;
+	replyData[SUCCESS]   = true;
+	replyData[MATCH_ID]  = matchID;
+	replyData[PLAYER_ID] = playerID;
 
 	sendReply(hdl, msgID, replyData);
 }
