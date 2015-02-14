@@ -76,11 +76,9 @@ void CyvasseServer::stop()
 void CyvasseServer::onMessage(connection_hdl hdl, WSServer::message_ptr msg)
 {
 	// Queue message up for sending by processing thread
-	unique_lock<mutex> lock(m_data.jobMtx);
+	lock_guard<mutex> lock(m_data.jobMtx);
 
 	m_data.jobQueue.emplace(hdl, msg);
-
-	lock.unlock();
 	m_data.jobCond.notify_one();
 }
 

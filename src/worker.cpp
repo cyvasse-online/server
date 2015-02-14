@@ -165,8 +165,6 @@ void Worker::processMessages()
 					}
 				}
 				// else?
-
-				break;
 			}
 			else if (msgType == MsgType::SERVER_REQUEST)
 				processServerRequest(job.conn_hdl, recvdJson);
@@ -223,7 +221,7 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 				"Expected major protocol version " + to_string(protocolVersionMajor)));
 		}
 
-		m_server.send(clientConnHdl, json::initCommSuccess(m_curMsgID));
+		m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
 	}
 }
 
@@ -366,8 +364,19 @@ void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Js
 		else if (listName == GameList::RUNNING_PUBLIC_GAMES)
 			m_data.publicGamesSubscribers.insert(clientConnHdl);
 		else
+		{
+			// Might have subscribed to correct ones, but that's okay.
+			// If this error ever appeared it would pretty surely be fixed quickly.
+
+			// TODO: error message doesn't include the failed list name
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
+			return;
+		}
 	}
+
+	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
+
+	// TODO: send listUpdate notification for non-empty lists
 }
 
 void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
@@ -392,6 +401,15 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 				m_data.publicGamesSubscribers.erase(clientConnHdl);
 		}
 		else
+		{
+			// Might have unsubscribed from correct ones, but that's okay.
+			// If this error ever appeared it would pretty surely be fixed quickly.
+
+			// TODO: error message doesn't include the failed list name
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
+			return;
+		}
 	}
+
+	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
 }
