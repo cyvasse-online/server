@@ -49,9 +49,6 @@ class CyvasseServer
 
 		void send(websocketpp::connection_hdl, const std::string&);
 		void send(websocketpp::connection_hdl, const Json::Value&);
-
-		void sendCommErr(websocketpp::connection_hdl, const std::string& errMsg);
-		void sendNotification(websocketpp::connection_hdl, const Json::Value& notificationData);
 };
 
 #endif // _CYVASSE_SERVER_HPP_

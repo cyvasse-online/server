@@ -16,22 +16,16 @@
 
 #include "cyvasse_server.hpp"
 
-#include <chrono>
 #include <thread>
-#include <json/value.h>
 #include <json/writer.h>
 //#include <cyvdb/match_manager.hpp>
-#include <cyvws/common.hpp>
-#include <cyvws/msg.hpp>
-#include <cyvws/notification.hpp>
-#include <cyvws/server_reply.hpp>
+#include <cyvws/json_notification.hpp>
 #include <cyvws/json_server_reply.hpp>
 #include "client_data.hpp"
 #include "match_data.hpp"
 #include "worker.hpp"
 
 using namespace std;
-using namespace std::chrono;
 using namespace websocketpp;
 
 using namespace cyvws;
@@ -111,13 +105,7 @@ void CyvasseServer::onClose(connection_hdl hdl)
 		if (*it2 == *clientData)
 			dataSets.erase(it2);
 		else
-		{
-			Json::Value notificationData;
-			notificationData[TYPE] = NotificationType::USER_LEFT;
-			// TODO
-
-			sendNotification(it2->getConnHdl(), notificationData);
-		}
+			send(it2->getConnHdl(), json::userLeft("User")); // TODO
 
 	if (dataSets.empty())
 	{
@@ -152,23 +140,4 @@ void CyvasseServer::send(connection_hdl hdl, const string& data)
 void CyvasseServer::send(connection_hdl hdl, const Json::Value& data)
 {
 	send(hdl, Json::FastWriter().write(data));
-}
-
-void CyvasseServer::sendCommErr(connection_hdl hdl, const string& errMsg)
-{
-	Json::Value msg;
-	msg[MSG_TYPE] = MsgType::NOTIFICATION;
-	msg[NOTIFICATION_DATA][TYPE]    = NotificationType::COMM_ERROR;
-	msg[NOTIFICATION_DATA][ERR_MSG] = errMsg;
-
-	send(hdl, msg);
-}
-
-void CyvasseServer::sendNotification(connection_hdl hdl, const Json::Value& notificationData)
-{
-	Json::Value msg;
-	msg[MSG_TYPE] = MsgType::NOTIFICATION;
-	msg[NOTIFICATION_DATA] = notificationData;
-
-	send(hdl, msg);
 }

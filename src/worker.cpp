@@ -30,13 +30,13 @@
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
 #include <cyvws/common.hpp>
-#include <cyvws/game_msg.hpp>
 #include <cyvws/init_comm.hpp>
+#include <cyvws/json_notification.hpp>
+#include <cyvws/json_server_reply.hpp>
 #include <cyvws/msg.hpp>
 #include <cyvws/notification.hpp>
 #include <cyvws/server_reply.hpp>
 #include <cyvws/server_request.hpp>
-#include <cyvws/json_server_reply.hpp>
 #include "cyvasse_server.hpp"
 #include "b64.hpp"
 #include "client_data.hpp"
@@ -124,7 +124,7 @@ void Worker::processMessages()
 				Json::Value ret;
 
 				if (!reader.parse(job.msg_ptr->get_payload(), ret, false))
-					m_server.sendCommErr(job.conn_hdl, "Received message is no valid JSON");
+					m_server.send(job.conn_hdl, json::commErr("Received message is no valid JSON"));
 
 				return ret;
 			}();
@@ -171,9 +171,9 @@ void Worker::processMessages()
 			else if (msgType == MsgType::SERVER_REQUEST)
 				processServerRequest(job.conn_hdl, recvdJson);
 			else if (msgType ==  MsgType::NOTIFICATION || msgType == MsgType::SERVER_REPLY)
-				m_server.sendCommErr(job.conn_hdl, "This msgType is not intended for client-to-server messages");
+				m_server.send(job.conn_hdl, json::commErr("This msgType is not intended for client-to-server messages"));
 			else
-				m_server.sendCommErr(job.conn_hdl, "msgType \"" + msgType + "\" is invalid");
+				m_server.send(job.conn_hdl, json::commErr("msgType \"" + msgType + "\" is invalid"));
 		}
 		catch(std::error_code& e)
 		{
@@ -197,18 +197,13 @@ void Worker::processServerRequest(connection_hdl clientConnHdl, const Json::Valu
 	const auto& action = requestData[ACTION].asString();
 	const auto& param  = requestData[PARAM];
 
-	if(action == ServerRequestAction::INIT_COMM)
-		processInitCommRequest(clientConnHdl, param);
-	else if (action == ServerRequestAction::CREATE_GAME)
-		processCreateGameRequest(clientConnHdl, param);
-	else if (action == ServerRequestAction::JOIN_GAME)
-		processJoinGameRequest(clientConnHdl, param);
-	else if (action == ServerRequestAction::SUBSCR_GAME_LIST_UPDATES)
-		processSubscrGameListRequest(clientConnHdl, param);
-	else if (action == ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES)
-		processUnsubscrGameListRequest(clientConnHdl, param);
+	if      (action == ServerRequestAction::INIT_COMM)                  processInitCommRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::CREATE_GAME)                processCreateGameRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::JOIN_GAME)                  processJoinGameRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::SUBSCR_GAME_LIST_UPDATES)   processSubscrGameListRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES) processUnsubscrGameListRequest(clientConnHdl, param);
 	else
-		m_server.sendCommErr(clientConnHdl, "Unrecognized server request action");
+		m_server.send(clientConnHdl, json::commErr("Unrecognized server request action"));
 }
 
 void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Value& param)
@@ -219,7 +214,7 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 	const auto& versionStr = param[PROTOCOL_VERSION].asString();
 
 	if (versionStr.empty())
-		m_server.sendCommErr(clientConnHdl, "Expected non-empty string value as protocolVersion in initComm");
+		m_server.send(clientConnHdl, json::commErr("Expected non-empty string value as protocolVersion in initComm"));
 	else
 	{
 		if (stoi(versionStr.substr(0, versionStr.find('.'))) != protocolVersionMajor)
