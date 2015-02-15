@@ -29,7 +29,9 @@
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
+#include <cyvws/chat_msg.hpp>
 #include <cyvws/common.hpp>
+#include <cyvws/game_msg.hpp>
 #include <cyvws/init_comm.hpp>
 #include <cyvws/json_notification.hpp>
 #include <cyvws/json_server_reply.hpp>
@@ -137,34 +139,26 @@ void Worker::processMessages()
 
 			const auto& msgType = recvdJson[MSG_TYPE].asString();
 
-			if (msgType == MsgType::CHAT_MSG ||
-				msgType == MsgType::CHAT_MSG_ACK ||
-				msgType == MsgType::GAME_MSG ||
+			if (msgType == MsgType::CHAT_MSG)
+			{
+				// TODO: Rework when we have user names
+				Json::Value msg = recvdJson;
+				msg[MSG_DATA][USER] = "Opponent";
+
+				distributeMessage(job.conn_hdl, msg);
+			}
+			else if (msgType == MsgType::GAME_MSG)
+			{
+				//if (recvdJson[MSG_DATA][ACTION] == GameMsgAction::SET_OPENING_ARRAY)
+					// TODO
+
+				distributeMessage(job.conn_hdl, recvdJson);
+			}
+			else if (msgType == MsgType::CHAT_MSG_ACK ||
 				msgType == MsgType::GAME_MSG_ACK ||
 				msgType == MsgType::GAME_MSG_ERR)
 			{
-				auto clientData = getClientData(job.conn_hdl);
-
-				if (clientData)
-				{
-					set<connection_hdl, owner_less<connection_hdl>> otherClients;
-
-					for (auto it2 : clientData->getMatchData().getClientDataSets())
-						if (*it2 != *clientData)
-							otherClients.insert(it2->getConnHdl());
-
-					if (!otherClients.empty())
-					{
-						// TODO: Does re-creating the Json string
-						// from the Json::Value make sense or should
-						// we just resend the original Json string?
-						string json = Json::FastWriter().write(recvdJson);
-
-						for (auto&& hdl : otherClients)
-							m_server.send(hdl, json);
-					}
-				}
-				// else?
+				distributeMessage(job.conn_hdl, recvdJson);
 			}
 			else if (msgType == MsgType::SERVER_REQUEST)
 				processServerRequest(job.conn_hdl, recvdJson);
@@ -333,7 +327,7 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			auto& notificationData = notification[NOTIFICATION_DATA];
 			notificationData[TYPE] = NotificationType::USER_JOINED;
 			notificationData[REGISTERED]  = false;
-			notificationData[SCREEN_NAME] = "User"; // TODO
+			notificationData[SCREEN_NAME] = "Opponent"; // TODO
 			//notificationData[ROLE] =
 
 			auto&& msg = Json::FastWriter().write(notification);
@@ -412,4 +406,24 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
+}
+
+void Worker::distributeMessage(connection_hdl clientConnHdl, const Json::Value& msg)
+{
+	auto clientData = getClientData(clientConnHdl);
+
+	if (clientData)
+	{
+		const auto& clientDataSets = clientData->getMatchData().getClientDataSets();
+
+		if (clientDataSets.size() > 1)
+		{
+			string json = Json::FastWriter().write(msg);
+
+			for (auto it : clientDataSets)
+				if (*it != *clientData)
+					m_server.send(it->getConnHdl(), json);
+		}
+	}
+	//else?
 }

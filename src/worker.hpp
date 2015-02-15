@@ -48,12 +48,14 @@ class Worker
 		// JobHandler main loop
 		void processMessages();
 
-		void processServerRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& recvdJson);
-		void processInitCommRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
-		void processCreateGameRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
-		void processJoinGameRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
-		void processSubscrGameListRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
-		void processUnsubscrGameListRequest(websocketpp::connection_hdl clientConnHdl, const Json::Value& param);
+		void processServerRequest(websocketpp::connection_hdl, const Json::Value& recvdJson);
+		void processInitCommRequest(websocketpp::connection_hdl, const Json::Value& param);
+		void processCreateGameRequest(websocketpp::connection_hdl, const Json::Value& param);
+		void processJoinGameRequest(websocketpp::connection_hdl, const Json::Value& param);
+		void processSubscrGameListRequest(websocketpp::connection_hdl, const Json::Value& param);
+		void processUnsubscrGameListRequest(websocketpp::connection_hdl, const Json::Value& param);
+
+		void distributeMessage(websocketpp::connection_hdl, const Json::Value& msg);
 };
 
 #endif // _WORKER_HPP_
