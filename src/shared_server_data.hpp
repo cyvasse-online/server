@@ -17,9 +17,11 @@
 #ifndef _SHARED_SERVER_DATA_HPP_
 #define _SHARED_SERVER_DATA_HPP_
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <cyvws/notification.hpp>
 
 #define _WEBSOCKETPP_CPP11_STL_
 #include <websocketpp/config/asio_no_tls.hpp>
@@ -44,14 +46,14 @@ struct Job
 
 struct SharedServerData
 {
-	typedef std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>>
-		ConnectionSet;
-
 	typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>, std::owner_less<websocketpp::connection_hdl>>
 		ClientMap;
 
 	typedef std::map<std::string, std::shared_ptr<MatchData>>
 		MatchMap;
+
+	typedef std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>>
+		ConnectionSet;
 
 	std::atomic_bool running = {true};
 
@@ -66,8 +68,17 @@ struct SharedServerData
 	std::mutex clientDataMtx;
 	std::mutex matchDataMtx;
 
-	ConnectionSet randomGamesSubscribers;
-	ConnectionSet publicGamesSubscribers;
+	std::array<cyvws::GamesListMap, 2> gameLists;
+	std::array<std::mutex, 2>          gameListsMtx;
+
+	std::array<ConnectionSet, 2> listSubscribers;
+	std::array<std::mutex, 2>    listSubscribersMtx;
+};
+
+enum GamesListID
+{
+	RANDOM_GAMES = 0,
+	PUBLIC_GAMES = 1
 };
 
 #endif // _SHARED_SERVER_DATA_HPP_

@@ -81,7 +81,7 @@ string Worker::newMatchID()
 	static ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
 
 	string res;
-	lock_guard<mutex> matchDataLock(m_data.matchDataMtx);
+	lock_guard<mutex> lock(m_data.matchDataMtx);
 
 	do
 	{
@@ -244,21 +244,29 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 		matchData->getClientDataSets().insert(clientData);
 
 		{
-			lock_guard<mutex> clientDataLock(m_data.clientDataMtx);
+			lock_guard<mutex> lock(m_data.clientDataMtx);
 			auto tmp = m_data.clientData.emplace(clientConnHdl, clientData);
 			assert(tmp.second);
 		}
 
 		{
-			lock_guard<mutex> matchDataLock(m_data.matchDataMtx);
+			lock_guard<mutex> lock(m_data.matchDataMtx);
 			auto tmp = m_data.matchData.emplace(matchID, matchData);
 			assert(tmp.second);
 		}
 
 		m_server.send(clientConnHdl, json::createGameSuccess(m_curMsgID, matchID, playerID));
 
-		// TODO: Update randomGames / publicGames lists and
-		// send a notification to the corresponding subscribers
+		if (random)
+		{
+			{
+				lock_guard<mutex> lock(m_data.gameListsMtx[RANDOM_GAMES]);
+				// TODO: send a meaningful title instead of "A game"
+				m_data.gameLists[RANDOM_GAMES].emplace(matchID, GamesListMappedType { "A game", !color });
+			}
+
+			m_server.listUpdated(RANDOM_GAMES);
+		}
 
 		// TODO
 		/*thread([=] {
@@ -308,7 +316,7 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			matchDataLock.unlock();
 
 			{
-				lock_guard<mutex> clientDataLock(m_data.clientDataMtx);
+				lock_guard<mutex> lock(m_data.clientDataMtx);
 				auto tmp = m_data.clientData.emplace(clientConnHdl, clientData);
 				assert(tmp.second);
 			}
@@ -335,6 +343,17 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			for (auto& clientIt : matchClients)
 				m_server.send(clientIt->getConnHdl(), msg);
 
+			auto it = m_data.gameLists[RANDOM_GAMES].find(matchID);
+			if (it != m_data.gameLists[RANDOM_GAMES].end())
+			{
+				{
+					lock_guard<mutex> lock(m_data.gameListsMtx[RANDOM_GAMES]);
+					m_data.gameLists[RANDOM_GAMES].erase(it);
+				}
+
+				m_server.listUpdated(RANDOM_GAMES);
+			}
+
 			/*thread([=] {
 				this_thread::sleep_for(milliseconds(50));
 
@@ -348,15 +367,18 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 
 void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
-	// ignore param["ruleSet"] for now
-	for (const auto& list : param[LISTS])
-	{
-		const auto& listName = list.asString();
+	vector<Json::Value> listUpdates;
 
-		if (listName == GameList::OPEN_RANDOM_GAMES)
-			m_data.randomGamesSubscribers.insert(clientConnHdl);
-		else if (listName == GameList::RUNNING_PUBLIC_GAMES)
-			m_data.publicGamesSubscribers.insert(clientConnHdl);
+	// ignore param["ruleSet"] for now
+	for (const auto& listVal : param[LISTS])
+	{
+		const auto& listName = listVal.asString();
+		GamesListID list = static_cast<GamesListID>(-1); // TODO: an optional type would be nice here
+
+		if (listName == GamesList::OPEN_RANDOM_GAMES)
+			list = RANDOM_GAMES;
+		else if (listName == GamesList::RUNNING_PUBLIC_GAMES)
+			list = PUBLIC_GAMES;
 		else
 		{
 			// Might have subscribed to correct ones, but that's okay.
@@ -366,34 +388,35 @@ void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Js
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
 			return;
 		}
+
+		if (list >= 0)
+		{
+			if (!m_data.gameLists[list].empty())
+				listUpdates.push_back(json::listUpdate(listName, m_data.gameLists[list]));
+
+			lock_guard<mutex> lock(m_data.listSubscribersMtx[list]);
+			m_data.listSubscribers[list].insert(clientConnHdl);
+		}
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
 
-	// TODO: send listUpdate notification for non-empty lists
+	for (auto&& jsonVal : listUpdates)
+		m_server.send(clientConnHdl, jsonVal);
 }
 
 void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
 	// ignore param["ruleSet"] for now
-	for (const auto& list : param[LISTS])
+	for (const auto& listVal : param[LISTS])
 	{
-		const auto& listName = list.asString();
+		const auto& listName = listVal.asString();
+		GamesListID list = static_cast<GamesListID>(-1);
 
-		if (listName == GameList::OPEN_RANDOM_GAMES)
-		{
-			const auto& it = m_data.randomGamesSubscribers.find(clientConnHdl);
-
-			if (it != m_data.randomGamesSubscribers.end())
-				m_data.randomGamesSubscribers.erase(clientConnHdl);
-		}
-		else if (listName == GameList::OPEN_RANDOM_GAMES)
-		{
-			const auto& it = m_data.publicGamesSubscribers.find(clientConnHdl);
-
-			if (it != m_data.publicGamesSubscribers.end())
-				m_data.publicGamesSubscribers.erase(clientConnHdl);
-		}
+		if (listName == GamesList::OPEN_RANDOM_GAMES)
+			list = RANDOM_GAMES;
+		else if (listName == GamesList::OPEN_RANDOM_GAMES)
+			list = PUBLIC_GAMES;
 		else
 		{
 			// Might have unsubscribed from correct ones, but that's okay.
@@ -403,6 +426,9 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::LIST_DOES_NOT_EXIST));
 			return;
 		}
+
+		if (list >= 0)
+			m_server.unsubscribe(clientConnHdl, list);
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));

@@ -17,13 +17,11 @@
 #ifndef _CYVASSE_SERVER_HPP_
 #define _CYVASSE_SERVER_HPP_
 
-#include <map>
 #include <memory>
 #include <set>
-#include <utility>
-#include <json/value.h>
 #include "shared_server_data.hpp"
 
+namespace Json { class Value; }
 class Worker;
 
 class CyvasseServer
@@ -41,6 +39,11 @@ class CyvasseServer
 
 		void run(uint16_t port, unsigned nWorkers);
 		void stop();
+
+		void listUpdated(GamesListID);
+
+		void unsubscribe(websocketpp::connection_hdl, GamesListID);
+		void unsubscribeAll(websocketpp::connection_hdl);
 
 		void onMessage(websocketpp::connection_hdl, WSServer::message_ptr);
 		void onClose(websocketpp::connection_hdl);

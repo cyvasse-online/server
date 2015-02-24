@@ -19,11 +19,10 @@
 
 #include <string>
 #include <thread>
-#include <json/value.h>
 #include "shared_server_data.hpp"
 
+namespace Json { class Value; }
 class CyvasseServer;
-
 class ClientData;
 
 class Worker
