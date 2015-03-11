@@ -15,9 +15,13 @@
  */
 
 #include <exception>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <csignal>
+#include <cstdio>
+
+#include <unistd.h>
 #include <yaml-cpp/yaml.h>
 #include <cyvdb/config.hpp>
 #include <make_unique.hpp> // TODO
@@ -25,7 +29,64 @@
 
 using namespace std;
 
+static constexpr const char* pidFileName = "cyvasse-server.pid";
+
+void createPidFile();
+void removePidFile();
+
 unique_ptr<CyvasseServer> server;
+
+void setupSignals();
+
+int main()
+{
+	setupSignals();
+
+	auto config = YAML::LoadFile("config.yml");
+	auto listenPort   = config["listenPort"].as<int>();
+	auto matchDataUrl = config["matchDataUrl"].as<string>();
+
+	if(matchDataUrl.empty())
+	{
+		cerr << "Error: No database url set!" << endl;
+		exit(1);
+	}
+
+	cyvdb::DBConfig::glob().setMatchDataUrl(matchDataUrl);
+
+	int retVal = 0;
+
+	try
+	{
+		createPidFile();
+
+		server = make_unique<CyvasseServer>();
+		server->run(listenPort, 1);
+	}
+	catch(std::exception& e)
+	{
+		cerr << "server exception: " << e.what() << endl;
+		retVal = 1;
+	}
+
+	removePidFile();
+	return retVal;
+}
+
+void createPidFile()
+{
+	ofstream pidFile(pidFileName);
+	if(pidFile)
+	{
+		pidFile << getpid();
+		pidFile.close();
+	}
+}
+
+void removePidFile()
+{
+	remove(pidFileName);
+}
 
 extern "C" void stopServer(int /* signal */)
 {
@@ -33,12 +94,14 @@ extern "C" void stopServer(int /* signal */)
 	{
 		server->stop();
 		server.reset();
+
+		removePidFile();
 	}
 
 	exit(0);
 }
 
-int main()
+void setupSignals()
 {
 #ifdef HAVE_SIGACTION
 	struct sigaction newAction, oldAction;
@@ -69,28 +132,4 @@ int main()
 	if(signal(SIGTERM, stopServer) == SIG_IGN)
 		signal(SIGTERM, SIG_IGN);
 #endif
-
-	auto config = YAML::LoadFile("config.yml");
-	auto listenPort   = config["listenPort"].as<int>();
-	auto matchDataUrl = config["matchDataUrl"].as<string>();
-
-	if(matchDataUrl.empty())
-	{
-		cerr << "Error: No database url set!" << endl;
-		exit(1);
-	}
-
-	cyvdb::DBConfig::glob().setMatchDataUrl(matchDataUrl);
-
-	try
-	{
-		server = make_unique<CyvasseServer>();
-		server->run(listenPort, 1);
-	}
-	catch(std::exception& e)
-	{
-		cerr << "server exception: " << e.what() << endl;
-	}
-
-	return 0;
 }
