@@ -1,4 +1,4 @@
-/* Copyright 2014 Jonas Platte
+/* Copyright 2014 - 2015 Jonas Platte
  *
  * This file is part of Cyvasse Online.
  *
@@ -25,6 +25,8 @@ namespace Json { class Value; }
 class CyvasseServer;
 class ClientData;
 
+using websocketpp::connection_hdl;
+
 class Worker
 {
 	private:
@@ -35,7 +37,7 @@ class Worker
 
 		unsigned m_curMsgID;
 
-		std::shared_ptr<ClientData> getClientData(websocketpp::connection_hdl);
+		std::shared_ptr<ClientData> getClientData(connection_hdl);
 
 		std::string newMatchID();
 		std::string newPlayerID();
@@ -47,14 +49,18 @@ class Worker
 		// JobHandler main loop
 		void processMessages();
 
-		void processServerRequest(websocketpp::connection_hdl, const Json::Value& recvdJson);
-		void processInitCommRequest(websocketpp::connection_hdl, const Json::Value& param);
-		void processCreateGameRequest(websocketpp::connection_hdl, const Json::Value& param);
-		void processJoinGameRequest(websocketpp::connection_hdl, const Json::Value& param);
-		void processSubscrGameListRequest(websocketpp::connection_hdl, const Json::Value& param);
-		void processUnsubscrGameListRequest(websocketpp::connection_hdl, const Json::Value& param);
+		void processServerRequest(connection_hdl, const Json::Value& msg);
+		void processInitCommRequest(connection_hdl, const Json::Value& param);
+		void processCreateGameRequest(connection_hdl, const Json::Value& param);
+		void processJoinGameRequest(connection_hdl, const Json::Value& param);
+		void processSubscrGameListRequest(connection_hdl, const Json::Value& param);
+		void processUnsubscrGameListRequest(connection_hdl, const Json::Value& param);
 
-		void distributeMessage(websocketpp::connection_hdl, const Json::Value& msg);
+		void processChatMsg(connection_hdl, const Json::Value& msg);
+
+		void processGameMsg(connection_hdl, const Json::Value& msg);
+
+		void distributeMessage(connection_hdl, const Json::Value& msg);
 };
 
 #endif // _WORKER_HPP_

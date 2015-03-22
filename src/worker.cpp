@@ -1,4 +1,4 @@
-/* Copyright 2014 Jonas Platte
+/* Copyright 2014 - 2015 Jonas Platte
  *
  * This file is part of Cyvasse Online.
  *
@@ -140,26 +140,13 @@ void Worker::processMessages()
 			const auto& msgType = recvdJson[MSG_TYPE].asString();
 
 			if (msgType == MsgType::CHAT_MSG)
-			{
-				// TODO: Rework when we have user names
-				Json::Value msg = recvdJson;
-				msg[MSG_DATA][USER] = "Opponent";
-
-				distributeMessage(job.conn_hdl, msg);
-			}
+				processChatMsg(job.conn_hdl, recvdJson);
 			else if (msgType == MsgType::GAME_MSG)
-			{
-				//if (recvdJson[MSG_DATA][ACTION] == GameMsgAction::SET_OPENING_ARRAY)
-					// TODO
-
-				distributeMessage(job.conn_hdl, recvdJson);
-			}
+				processGameMsg(job.conn_hdl, recvdJson);
 			else if (msgType == MsgType::CHAT_MSG_ACK ||
-				msgType == MsgType::GAME_MSG_ACK ||
-				msgType == MsgType::GAME_MSG_ERR)
-			{
+					msgType == MsgType::GAME_MSG_ACK ||
+					msgType == MsgType::GAME_MSG_ERR)
 				distributeMessage(job.conn_hdl, recvdJson);
-			}
 			else if (msgType == MsgType::SERVER_REQUEST)
 				processServerRequest(job.conn_hdl, recvdJson);
 			else if (msgType ==  MsgType::NOTIFICATION || msgType == MsgType::SERVER_REPLY)
@@ -182,9 +169,9 @@ void Worker::processMessages()
 	}
 }
 
-void Worker::processServerRequest(connection_hdl clientConnHdl, const Json::Value& recvdJson)
+void Worker::processServerRequest(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	const auto& requestData = recvdJson[REQUEST_DATA];
+	const auto& requestData = msg[REQUEST_DATA];
 
 	const auto& action = requestData[ACTION].asString();
 	const auto& param  = requestData[PARAM];
@@ -415,7 +402,7 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 
 		if (listName == GamesList::OPEN_RANDOM_GAMES)
 			list = RANDOM_GAMES;
-		else if (listName == GamesList::OPEN_RANDOM_GAMES)
+		else if (listName == GamesList::RUNNING_PUBLIC_GAMES)
 			list = PUBLIC_GAMES;
 		else
 		{
@@ -432,6 +419,22 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
+}
+
+void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg)
+{
+	// TODO: Rework when we have user names
+	Json::Value newMsg = msg;
+	newMsg[MSG_DATA][USER] = "Opponent";
+
+	distributeMessage(clientConnHdl, newMsg);
+}
+
+void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg)
+{
+	// TODO
+
+	distributeMessage(clientConnHdl, msg);
 }
 
 void Worker::distributeMessage(connection_hdl clientConnHdl, const Json::Value& msg)
