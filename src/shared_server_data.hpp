@@ -33,12 +33,14 @@ typedef websocketpp::server<websocketpp::config::asio> WSServer;
 class ClientData;
 class MatchData;
 
+using websocketpp::connection_hdl;
+
 struct Job
 {
-	websocketpp::connection_hdl conn_hdl;
+	connection_hdl conn_hdl;
 	WSServer::message_ptr msg_ptr;
 
-	Job(websocketpp::connection_hdl connHdl, WSServer::message_ptr msgPtr)
+	Job(connection_hdl connHdl, WSServer::message_ptr msgPtr)
 		: conn_hdl(connHdl)
 		, msg_ptr(msgPtr)
 	{ }
@@ -46,14 +48,9 @@ struct Job
 
 struct SharedServerData
 {
-	typedef std::map<websocketpp::connection_hdl, std::shared_ptr<ClientData>, std::owner_less<websocketpp::connection_hdl>>
-		ClientMap;
-
-	typedef std::map<std::string, std::shared_ptr<MatchData>>
-		MatchMap;
-
-	typedef std::set<websocketpp::connection_hdl, std::owner_less<websocketpp::connection_hdl>>
-		ConnectionSet;
+	using ClientMap     = std::map<connection_hdl, std::shared_ptr<ClientData>, std::owner_less<connection_hdl>>;
+	using MatchMap      = std::map<std::string, std::shared_ptr<MatchData>>;
+	using ConnectionSet = std::set<connection_hdl, std::owner_less<connection_hdl>>;
 
 	std::atomic_bool running = {true};
 

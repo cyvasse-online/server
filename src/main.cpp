@@ -24,7 +24,6 @@
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 #include <cyvdb/config.hpp>
-#include <make_unique.hpp> // TODO
 #include "cyvasse_server.hpp"
 
 using namespace std;

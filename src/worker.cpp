@@ -17,34 +17,42 @@
 #include "worker.hpp"
 
 #include <chrono>
+#include <map>
 #include <random>
 #include <set>
 #include <stdexcept>
+
 #include <json/value.h>
 #include <json/reader.h>
 #include <json/writer.h>
 #include <tntdb/error.h>
+
+#include <optional.hpp>
 //#include <cyvdb/match_manager.hpp>
 //#include <cyvdb/player_manager.hpp>
 #include <cyvmath/match.hpp>
 #include <cyvmath/player.hpp>
 #include <cyvmath/rule_set_create.hpp>
+#include <cyvmath/mikelepage/piece.hpp>
 #include <cyvws/chat_msg.hpp>
 #include <cyvws/common.hpp>
 #include <cyvws/game_msg.hpp>
 #include <cyvws/init_comm.hpp>
+#include <cyvws/json_game_msg.hpp>
 #include <cyvws/json_notification.hpp>
 #include <cyvws/json_server_reply.hpp>
 #include <cyvws/msg.hpp>
 #include <cyvws/notification.hpp>
 #include <cyvws/server_reply.hpp>
 #include <cyvws/server_request.hpp>
+
 #include "cyvasse_server.hpp"
 #include "b64.hpp"
 #include "client_data.hpp"
 #include "match_data.hpp"
 
 using namespace cyvmath;
+using namespace cyvmath::mikelepage;
 using namespace cyvws;
 
 using namespace std;
@@ -321,8 +329,10 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 
 			auto& notificationData = notification[NOTIFICATION_DATA];
 			notificationData[TYPE] = NotificationType::USER_JOINED;
+
+			// TODO: Update when there are registered user names
 			notificationData[REGISTERED]  = false;
-			notificationData[SCREEN_NAME] = "Opponent"; // TODO
+			notificationData[SCREEN_NAME] = PlayersColorToPrettyStr(color);
 			//notificationData[ROLE] =
 
 			auto&& msg = Json::FastWriter().write(notification);
@@ -360,12 +370,12 @@ void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Js
 	for (const auto& listVal : param[LISTS])
 	{
 		const auto& listName = listVal.asString();
-		GamesListID list = static_cast<GamesListID>(-1); // TODO: an optional type would be nice here
+		optional<GamesListID> optList;
 
 		if (listName == GamesList::OPEN_RANDOM_GAMES)
-			list = RANDOM_GAMES;
+			optList = RANDOM_GAMES;
 		else if (listName == GamesList::RUNNING_PUBLIC_GAMES)
-			list = PUBLIC_GAMES;
+			optList = PUBLIC_GAMES;
 		else
 		{
 			// Might have subscribed to correct ones, but that's okay.
@@ -376,8 +386,10 @@ void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Js
 			return;
 		}
 
-		if (list >= 0)
+		if (optList)
 		{
+			auto list = *optList;
+
 			if (!m_data.gameLists[list].empty())
 				listUpdates.push_back(json::listUpdate(listName, m_data.gameLists[list]));
 
@@ -398,12 +410,12 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 	for (const auto& listVal : param[LISTS])
 	{
 		const auto& listName = listVal.asString();
-		GamesListID list = static_cast<GamesListID>(-1);
+		optional<GamesListID> optList;
 
 		if (listName == GamesList::OPEN_RANDOM_GAMES)
-			list = RANDOM_GAMES;
+			optList = RANDOM_GAMES;
 		else if (listName == GamesList::RUNNING_PUBLIC_GAMES)
-			list = PUBLIC_GAMES;
+			optList = PUBLIC_GAMES;
 		else
 		{
 			// Might have unsubscribed from correct ones, but that's okay.
@@ -414,8 +426,8 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 			return;
 		}
 
-		if (list >= 0)
-			m_server.unsubscribe(clientConnHdl, list);
+		if (optList)
+			m_server.unsubscribe(clientConnHdl, *optList);
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
@@ -432,7 +444,45 @@ void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg
 
 void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	// TODO
+	const auto& msgData = msg[MSG_DATA];
+	const auto& param = msgData[PARAM];
+
+	auto cdIt = m_data.clientData.find(clientConnHdl);
+	if (cdIt == m_data.clientData.end())
+		return; // TODO: log an error before
+
+	auto& clientData = cdIt->second;
+
+	auto& player = clientData->getPlayer();
+	auto& match  = clientData->getMatchData().getMatch();
+
+	static const map<string, function<void()>> actionFuncs {
+		//{GameMsgAction::END_TURN, {}},
+		{GameMsgAction::MOVE, [&] { }},
+		{GameMsgAction::MOVE_CAPTURE, [&] { }},
+		{GameMsgAction::PROMOTE, [&] { }},
+		{GameMsgAction::RESIGN, {}},
+		{GameMsgAction::SET_IS_READY, {}},
+		{GameMsgAction::SET_OPENING_ARRAY, [&] {
+			const auto& pieces = json::pieceMap(param);
+
+			evalOpeningArray(pieces);
+
+			for (const auto& pmIt : pieces)
+			{
+				for (const auto& coord : pmIt.second)
+				{
+					// TODO: insert into piecemap in match
+				}
+			}
+
+			// TODO: check setup state
+		}}
+	};
+
+	const auto& func = actionFuncs.at(msgData[ACTION].asString());
+	if (func)
+		func();
 
 	distributeMessage(clientConnHdl, msg);
 }
