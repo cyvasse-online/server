@@ -28,8 +28,8 @@ cyvasse_server_LDFLAGS = \
 
 cyvasse_server_LDADD = \
 	$(JSONCPP_LIBS) \
+	$(top_builddir)/cyvasse-common/libcyvasse.a \
 	$(top_builddir)/cyvasse-common/libcyvdb.a \
-	$(top_builddir)/cyvasse-common/libcyvmath.a \
 	$(top_builddir)/cyvasse-common/libcyvws.a \
 	$(top_builddir)/libb64/src/libb64.a \
 	-lboost_system \

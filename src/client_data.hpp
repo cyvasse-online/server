@@ -1,4 +1,4 @@
-/* Copyright 2014 Jonas Platte
+/* Copyright 2014 - 2015 Jonas Platte
 *
 * This file is part of Cyvasse Online.
 *
@@ -19,32 +19,30 @@
 
 #include <memory>
 #include <websocketpp/common/connection_hdl.hpp>
-#include <cyvmath/player.hpp>
+#include <cyvasse/player.hpp>
 
-using cyvmath::Player;
+using websocketpp::connection_hdl;
 
 class MatchData;
 
 class ClientData
 {
 	private:
-		std::unique_ptr<Player> m_player;
+		cyvasse::Player m_player;
 
-		websocketpp::connection_hdl m_connHdl;
+		connection_hdl m_connHdl;
 
 		MatchData& m_matchData;
 
 	public:
-		ClientData(std::unique_ptr<Player> player, websocketpp::connection_hdl hdl, MatchData& matchData)
-			: m_player(std::move(player))
+		ClientData(cyvasse::Match& match, cyvasse::PlayersColor color, const std::string& playerID, connection_hdl hdl, MatchData& matchData)
+			: m_player(match, color, std::make_unique<cyvasse::Fortress>(color, cyvasse::Coordinate(5, 5)), playerID)
 			, m_connHdl(hdl)
 			, m_matchData(matchData)
-		{
-			assert(m_player);
-		}
+		{ }
 
-		Player& getPlayer()
-		{ return *m_player; }
+		cyvasse::Player& getPlayer()
+		{ return m_player; }
 
 		websocketpp::connection_hdl getConnHdl() const
 		{ return m_connHdl; }
@@ -52,12 +50,11 @@ class ClientData
 		MatchData& getMatchData()
 		{ return m_matchData; }
 
-
 		bool operator==(const ClientData& other) const
-		{ return m_player->getID() == other.m_player->getID(); }
+		{ return m_player.getID() == other.m_player.getID(); }
 
 		bool operator!=(const ClientData& other) const
-		{ return m_player->getID() != other.m_player->getID(); }
+		{ return m_player.getID() != other.m_player.getID(); }
 };
 
 #endif // _CLIENT_DATA_HPP_

@@ -30,10 +30,9 @@
 #include <optional.hpp>
 //#include <cyvdb/match_manager.hpp>
 //#include <cyvdb/player_manager.hpp>
-#include <cyvmath/match.hpp>
-#include <cyvmath/player.hpp>
-#include <cyvmath/rule_set_create.hpp>
-#include <cyvmath/mikelepage/piece.hpp>
+#include <cyvasse/match.hpp>
+#include <cyvasse/player.hpp>
+#include <cyvasse/piece.hpp>
 #include <cyvws/chat_msg.hpp>
 #include <cyvws/common.hpp>
 #include <cyvws/game_msg.hpp>
@@ -51,8 +50,7 @@
 #include "client_data.hpp"
 #include "match_data.hpp"
 
-using namespace cyvmath;
-using namespace cyvmath::mikelepage;
+using namespace cyvasse;
 using namespace cyvws;
 
 using namespace std;
@@ -220,7 +218,7 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
 	else
 	{
-		auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
+		//auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
 		auto color   = StrToPlayersColor(param[COLOR].asString());
 		auto random  = param[RANDOM].asBool();
 		auto _public = param[PUBLIC].asBool();
@@ -230,10 +228,9 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 
 		// TODO: Check whether all necessary parameters are set and valid
 
-		auto matchData = make_shared<MatchData>(createMatch(ruleSet, matchID));
+		auto matchData = make_shared<MatchData>(matchID);
 		auto clientData = make_shared<ClientData>(
-			createPlayer(matchData->getMatch(), color, playerID),
-			clientConnHdl, *matchData
+			matchData->getMatch(), color, playerID, clientConnHdl, *matchData
 		);
 
 		matchData->getClientDataSets().insert(clientData);
@@ -297,13 +294,13 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_FULL));
 		else
 		{
-			auto ruleSet  = matchData->getMatch().getRuleSet();
+			//auto ruleSet  = matchData->getMatch().getRuleSet();
 			auto color    = !(*matchClients.begin())->getPlayer().getColor();
 			auto matchID  = param[MATCH_ID].asString();
 			auto playerID = newPlayerID();
 
 			auto clientData = make_shared<ClientData>(
-				createPlayer(matchData->getMatch(), color, playerID),
+				matchData->getMatch(), color, playerID,
 				clientConnHdl, *matchData
 			);
 
@@ -320,7 +317,7 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			replyData[SUCCESS]   = true;
 			replyData[COLOR]     = PlayersColorToStr(color);
 			replyData[PLAYER_ID] = playerID;
-			replyData[RULE_SET]  = RuleSetToStr(ruleSet);
+			//replyData[RULE_SET]  = RuleSetToStr(ruleSet);
 
 			m_server.send(clientConnHdl, json::serverReply(m_curMsgID, replyData));
 

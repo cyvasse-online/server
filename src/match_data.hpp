@@ -20,8 +20,7 @@
 #include <memory>
 #include <set>
 #include <cassert>
-#include <cyvmath/match.hpp>
-#include <cyvmath/rule_sets.hpp>
+#include <cyvasse/match.hpp>
 
 class ClientData;
 
@@ -32,19 +31,17 @@ class MatchData
 		typedef std::set<ClientDataPtr, std::owner_less<ClientDataPtr>> ClientDataSets;
 
 	private:
-		std::unique_ptr<cyvmath::Match> m_match;
+		cyvasse::Match m_match;
 
 		ClientDataSets m_clientDataSets;
 
 	public:
-		MatchData(std::unique_ptr<cyvmath::Match> match)
-			: m_match(std::move(match))
-		{
-			assert(m_match);
-		}
+		MatchData(const std::string& matchID) // TODO: random, _public
+			: m_match(matchID)
+		{ }
 
-		cyvmath::Match& getMatch()
-		{ return *m_match; }
+		cyvasse::Match& getMatch()
+		{ return m_match; }
 
 		ClientDataSets& getClientDataSets()
 		{ return m_clientDataSets; }
