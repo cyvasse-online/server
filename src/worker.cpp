@@ -453,33 +453,36 @@ void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg
 	auto& player = clientData->getPlayer();
 	auto& match  = clientData->getMatchData().getMatch();
 
-	static const map<string, function<void()>> actionFuncs {
-		//{GameMsgAction::END_TURN, {}},
-		{GameMsgAction::MOVE, [&] { }},
-		{GameMsgAction::MOVE_CAPTURE, [&] { }},
-		{GameMsgAction::PROMOTE, [&] { }},
-		{GameMsgAction::RESIGN, {}},
-		{GameMsgAction::SET_IS_READY, {}},
-		{GameMsgAction::SET_OPENING_ARRAY, [&] {
-			const auto& pieces = json::pieceMap(param);
+	const auto& action = msgData[ACTION].asString();
 
-			evalOpeningArray(pieces);
+	if (action == GameMsgAction::MOVE)
+	{
+		// TODO
+	}
+	else if (action == GameMsgAction::MOVE_CAPTURE)
+	{
+		// TODO
+	}
+	else if (action == GameMsgAction::PROMOTE)
+	{
+		// TODO
+	}
+	else if (action == GameMsgAction::SET_OPENING_ARRAY)
+	{
+		const auto& pieces = json::pieceMap(param);
 
-			for (const auto& pmIt : pieces)
+		evalOpeningArray(pieces);
+
+		for (const auto& pmIt : pieces)
+		{
+			for (const auto& coord : pmIt.second)
 			{
-				for (const auto& coord : pmIt.second)
-				{
-					// TODO: insert into piecemap in match
-				}
+				// TODO: insert into piecemap in match
 			}
+		}
 
-			// TODO: check setup state
-		}}
-	};
-
-	const auto& func = actionFuncs.at(msgData[ACTION].asString());
-	if (func)
-		func();
+		// TODO: check setup state
+	}
 
 	distributeMessage(clientConnHdl, msg);
 }
