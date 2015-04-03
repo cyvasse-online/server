@@ -221,7 +221,7 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 		//auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
 		auto color   = StrToPlayersColor(param[COLOR].asString());
 		auto random  = param[RANDOM].asBool();
-		auto _public = param[PUBLIC].asBool();
+		//auto _public = param[PUBLIC].asBool(); // TODO
 
 		auto matchID  = newMatchID();
 		auto playerID = newPlayerID();
@@ -313,13 +313,24 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 				assert(tmp.second);
 			}
 
-			Json::Value replyData;
-			replyData[SUCCESS]   = true;
-			replyData[COLOR]     = PlayersColorToStr(color);
-			replyData[PLAYER_ID] = playerID;
-			//replyData[RULE_SET]  = RuleSetToStr(ruleSet);
+			{ // TODO: moving this to cyvws seems like a good idea
+				Json::Value replyData;
+				replyData[SUCCESS]   = true;
+				replyData[COLOR]     = PlayersColorToStr(color);
+				replyData[PLAYER_ID] = playerID;
+				//replyData[RULE_SET]  = RuleSetToStr(ruleSet);
 
-			m_server.send(clientConnHdl, json::serverReply(m_curMsgID, replyData));
+				auto& match = matchData->getMatch();
+
+				auto& gameStatus = replyData[GAME_STATUS];
+				gameStatus[SETUP] = match.inSetup();
+
+				auto& pieces =  match.getActivePieces();
+				if (!pieces.empty())
+					gameStatus[PIECE_POSITIONS] = json::pieceMap(pieces);
+
+				m_server.send(clientConnHdl, json::serverReply(m_curMsgID, replyData));
+			}
 
 			Json::Value notification;
 			notification[MSG_TYPE] = MsgType::NOTIFICATION;
@@ -441,50 +452,67 @@ void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg
 
 void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	const auto& msgData = msg[MSG_DATA];
-	const auto& param = msgData[PARAM];
-
-	auto cdIt = m_data.clientData.find(clientConnHdl);
-	if (cdIt == m_data.clientData.end())
+	auto clientData = getClientData(clientConnHdl);
+	if (!clientData)
 		return; // TODO: log an error before
 
-	auto& clientData = cdIt->second;
-
-	auto& player = clientData->getPlayer();
-	auto& match  = clientData->getMatchData().getMatch();
-
+	const auto& msgData = msg[MSG_DATA];
 	const auto& action = msgData[ACTION].asString();
+	const auto& param = msgData[PARAM];
 
 	if (action == GameMsgAction::MOVE)
-	{
-		// TODO
-	}
+		processMoveMsg(*clientData, param);
 	else if (action == GameMsgAction::MOVE_CAPTURE)
-	{
-		// TODO
-	}
+		processMoveCaptureMsg(*clientData, param);
 	else if (action == GameMsgAction::PROMOTE)
-	{
-		// TODO
-	}
+		processPromoteMsg(*clientData, param);
 	else if (action == GameMsgAction::SET_OPENING_ARRAY)
-	{
-		const auto& pieces = json::pieceMap(param);
-
-		evalOpeningArray(pieces);
-
-		for (const auto& pmIt : pieces)
-		{
-			for (const auto& coord : pmIt.second)
-			{
-				// TODO: insert into piecemap in match
-			}
-		}
-
-		// TODO: check setup state
-	}
+		processSetOpeningArrayMsg(*clientData, param);
 
 	distributeMessage(clientConnHdl, msg);
+}
+
+void Worker::processSetOpeningArrayMsg(ClientData& clientData, const Json::Value& param)
+{
+	const auto& pieces = json::pieceMap(param);
+	evalOpeningArray(pieces);
+
+	auto& player = clientData.getPlayer();
+	auto& match  = clientData.getMatchData().getMatch();
+
+	for (const auto& pmIt : pieces)
+	{
+		for (const auto& coord : pmIt.second)
+		{
+			if (pmIt.first == PieceType::KING)
+				player.getFortress().setCoord(coord);
+
+			match.getActivePieces().emplace(coord, make_shared<Piece>(
+				player.getColor(), pmIt.first, coord, match
+			));
+		}
+	}
+
+	player.setupDone();
+
+	auto opColor = !player.getColor();
+	if (match.hasPlayer(opColor) && match.getPlayer(opColor).isSetupDone())
+		match.setupDone();
+}
+
+void Worker::processMoveMsg(ClientData& clientData, const Json::Value& param)
+{
+	// TODO
+}
+
+void Worker::processMoveCaptureMsg(ClientData& clientData, const Json::Value& param)
+{
+	// TODO
+}
+
+void Worker::processPromoteMsg(ClientData& clientData, const Json::Value& param)
+{
+	// TODO
 }
 
 void Worker::distributeMessage(connection_hdl clientConnHdl, const Json::Value& msg)

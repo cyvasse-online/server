@@ -19,6 +19,8 @@
 
 #include <memory>
 #include <websocketpp/common/connection_hdl.hpp>
+
+#include <cyvasse/match.hpp>
 #include <cyvasse/player.hpp>
 
 using websocketpp::connection_hdl;
@@ -28,7 +30,7 @@ class MatchData;
 class ClientData
 {
 	private:
-		cyvasse::Player m_player;
+		cyvasse::Player& m_player;
 
 		connection_hdl m_connHdl;
 
@@ -36,7 +38,13 @@ class ClientData
 
 	public:
 		ClientData(cyvasse::Match& match, cyvasse::PlayersColor color, const std::string& playerID, connection_hdl hdl, MatchData& matchData)
-			: m_player(match, color, std::make_unique<cyvasse::Fortress>(color, cyvasse::Coordinate(5, 5)), playerID)
+			: m_player([&]() -> cyvasse::Player& {
+				match.setPlayer(color, std::make_unique<cyvasse::Player>(
+					match, color, std::make_unique<cyvasse::Fortress>(color, cyvasse::HexCoordinate<6>(5, 5)), playerID
+				));
+
+				return match.getPlayer(color);
+			}())
 			, m_connHdl(hdl)
 			, m_matchData(matchData)
 		{ }

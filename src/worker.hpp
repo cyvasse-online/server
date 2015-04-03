@@ -59,6 +59,10 @@ class Worker
 		void processChatMsg(connection_hdl, const Json::Value& msg);
 
 		void processGameMsg(connection_hdl, const Json::Value& msg);
+		void processSetOpeningArrayMsg(ClientData&, const Json::Value& param);
+		void processMoveMsg(ClientData&, const Json::Value& param);
+		void processMoveCaptureMsg(ClientData&, const Json::Value& param);
+		void processPromoteMsg(ClientData&, const Json::Value& param);
 
 		void distributeMessage(connection_hdl, const Json::Value& msg);
 };
