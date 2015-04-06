@@ -325,7 +325,7 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 				auto& gameStatus = replyData[GAME_STATUS];
 				gameStatus[SETUP] = match.inSetup();
 
-				auto& pieces =  match.getActivePieces();
+				auto& pieces = match.getActivePieces();
 				if (!pieces.empty())
 					gameStatus[PIECE_POSITIONS] = json::pieceMap(pieces);
 
@@ -339,8 +339,8 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			notificationData[TYPE] = NotificationType::USER_JOINED;
 
 			// TODO: Update when there are registered user names
-			notificationData[REGISTERED]  = false;
-			notificationData[SCREEN_NAME] = PlayersColorToPrettyStr(color);
+			notificationData[REGISTERED] = false;
+			notificationData[USERNAME]   = PlayersColorToPrettyStr(color);
 			//notificationData[ROLE] =
 
 			auto&& msg = Json::FastWriter().write(notification);
