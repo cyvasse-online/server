@@ -281,8 +281,10 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_FULL));
 		else
 		{
+			const auto& opponentData = *matchClients.begin();
+
 			//auto ruleSet  = matchData->getMatch().getRuleSet();
-			auto color    = !(*matchClients.begin())->getPlayer().getColor();
+			auto color    = !opponentData->getPlayer().getColor();
 			auto matchID  = param[MATCH_ID].asString();
 			auto playerID = newPlayerID();
 
@@ -306,6 +308,9 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 				replyData[COLOR]     = PlayersColorToStr(color);
 				replyData[PLAYER_ID] = playerID;
 				//replyData[RULE_SET]  = RuleSetToStr(ruleSet);
+
+				auto& opponent = replyData[OPPONENT];
+				opponent[USERNAME]   = opponentData->username;
 
 				auto& match = matchData->getMatch();
 
