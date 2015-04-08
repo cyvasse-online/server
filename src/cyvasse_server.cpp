@@ -146,7 +146,7 @@ void CyvasseServer::onClose(connection_hdl hdl)
 			if (*it == *clientData)
 				dataSets.erase(it);
 			else
-				send(it->getConnHdl(), json::userLeft("User")); // TODO
+				send(it->getConnHdl(), json::userLeft(clientData->username));
 		}
 
 		// if this was the last / only player connected

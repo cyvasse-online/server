@@ -443,9 +443,12 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 
 void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	// TODO: Rework when we have user names
+	auto clientData = getClientData(clientConnHdl);
+	if (!clientData)
+		return; // TODO: log an error
+
 	Json::Value newMsg = msg;
-	newMsg[MSG_DATA][USER] = "Opponent";
+	newMsg[MSG_DATA][USER] = clientData->username;
 
 	distributeMessage(clientConnHdl, newMsg);
 }
@@ -454,7 +457,7 @@ void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg
 {
 	auto clientData = getClientData(clientConnHdl);
 	if (!clientData)
-		return; // TODO: log an error before
+		return; // TODO: log an error
 
 	const auto& msgData = msg[MSG_DATA];
 	const auto& action = msgData[ACTION].asString();

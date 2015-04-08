@@ -18,6 +18,7 @@
 #define _CLIENT_DATA_HPP_
 
 #include <memory>
+#include <string>
 #include <websocketpp/common/connection_hdl.hpp>
 
 #include <cyvasse/match.hpp>
@@ -37,6 +38,9 @@ class ClientData
 		MatchData& m_matchData;
 
 	public:
+		// doesn't really have restrictions, so why make it private?
+		std::string username;
+
 		ClientData(cyvasse::Match& match, cyvasse::PlayersColor color, const std::string& playerID, connection_hdl hdl, MatchData& matchData)
 			: m_player([&]() -> cyvasse::Player& {
 				match.setPlayer(color, std::make_unique<cyvasse::Player>(
@@ -47,6 +51,7 @@ class ClientData
 			}())
 			, m_connHdl(hdl)
 			, m_matchData(matchData)
+			, username(cyvasse::PlayersColorToPrettyStr(color))
 		{ }
 
 		cyvasse::Player& getPlayer()
