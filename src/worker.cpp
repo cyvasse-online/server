@@ -41,7 +41,6 @@
 #include <cyvws/json_notification.hpp>
 #include <cyvws/json_server_reply.hpp>
 #include <cyvws/msg.hpp>
-#include <cyvws/notification.hpp>
 #include <cyvws/server_reply.hpp>
 #include <cyvws/server_request.hpp>
 
@@ -172,6 +171,7 @@ void Worker::processServerRequest(connection_hdl clientConnHdl, const Json::Valu
 	if      (action == ServerRequestAction::INIT_COMM)                  processInitCommRequest(clientConnHdl, param);
 	else if (action == ServerRequestAction::CREATE_GAME)                processCreateGameRequest(clientConnHdl, param);
 	else if (action == ServerRequestAction::JOIN_GAME)                  processJoinGameRequest(clientConnHdl, param);
+	else if (action == ServerRequestAction::SET_USERNAME)               processSetUsernameRequest(clientConnHdl, param);
 	else if (action == ServerRequestAction::SUBSCR_GAME_LIST_UPDATES)   processSubscrGameListRequest(clientConnHdl, param);
 	else if (action == ServerRequestAction::UNSUBSCR_GAME_LIST_UPDATES) processUnsubscrGameListRequest(clientConnHdl, param);
 	else
@@ -319,18 +319,8 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 				m_server.send(clientConnHdl, json::serverReply(m_curMsgID, replyData));
 			}
 
-			Json::Value notification;
-			notification[MSG_TYPE] = MsgType::NOTIFICATION;
-
-			auto& notificationData = notification[NOTIFICATION_DATA];
-			notificationData[TYPE] = NotificationType::USER_JOINED;
-
-			// TODO: Update when there are registered user names
-			notificationData[REGISTERED] = false;
-			notificationData[USERNAME]   = PlayersColorToPrettyStr(color);
-			//notificationData[ROLE] =
-
-			auto&& msg = Json::FastWriter().write(notification);
+			// role and registered hardcoded *for now* [TODO]
+			auto&& msg = Json::FastWriter().write(json::userJoined(PlayersColorToPrettyStr(color), false, ""));
 
 			for (auto& clientIt : matchClients)
 				m_server.send(clientIt->getConnHdl(), msg);
@@ -357,9 +347,36 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 	}
 }
 
-void WorkerprocessSetUsernameRequest(connection_hdl, const Json::Value& param)
+void Worker::processSetUsernameRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
-	// TODO
+	auto newUsername = param.asString();
+
+	if (newUsername.empty())
+	{
+		m_server.send(clientConnHdl, json::commErr("Username can't be empty"));
+		return;
+	}
+
+	auto clientData = m_data.getClientData(clientConnHdl);
+
+	if (!clientData)
+	{
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::NOT_IN_GAME));
+		return;
+	}
+
+	auto oldUsername = clientData->username;
+	clientData->username = newUsername;
+
+	auto notificationStr = Json::FastWriter().write(json::usernameUpdate(oldUsername, newUsername));
+	for (const auto& it : clientData->getMatchData().getClientDataSets())
+	{
+		auto&& hdl = it->getConnHdl();
+		if (hdl.owner_before(clientConnHdl) || clientConnHdl.owner_before(hdl)) // test for inequality
+			m_server.send(hdl, notificationStr);
+	}
+
+	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
 }
 
 void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
