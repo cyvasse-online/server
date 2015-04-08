@@ -136,13 +136,14 @@ void CyvasseServer::onClose(connection_hdl hdl)
 
 	auto& dataSets = clientData->getMatchData().getClientDataSets();
 
-	for (auto&& it : dataSets)
 	{
-		if (*it == *clientData)
+		auto it = dataSets.find(clientData);
+		if (it != dataSets.end())
 			dataSets.erase(it);
-		else
-			send(it->getConnHdl(), json::userLeft(clientData->username));
 	}
+
+	for (auto&& it : dataSets)
+		send(it->getConnHdl(), json::userLeft(clientData->username));
 
 	// if this was the last / only player connected
 	// to this match, remove the match completely
