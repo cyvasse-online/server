@@ -5,14 +5,10 @@ AUTOMAKE_OPTIONS = subdir-objects
 bin_PROGRAMS = cyvasse-server
 
 cyvasse_server_SOURCES = \
-	src/b64.hpp \
-	src/client_data.hpp \
 	src/cyvasse_server.cpp \
-	src/cyvasse_server.hpp \
 	src/main.cpp \
-	src/match_data.hpp \
-	src/worker.cpp \
-	src/worker.hpp
+	src/shared_server_data.cpp \
+	src/worker.cpp
 
 cyvasse_server_CPPFLAGS = \
 	-I$(top_srcdir)/cyvasse-common/include \

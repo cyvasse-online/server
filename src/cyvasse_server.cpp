@@ -124,64 +124,58 @@ void CyvasseServer::onClose(connection_hdl hdl)
 {
 	unsubscribeAll(hdl);
 
-	shared_ptr<ClientData> clientData;
+	shared_ptr<ClientData> clientData = m_data.getClientData(hdl);
+
+	if (!clientData)
+		return;
 
 	{
-		auto it = m_data.clientData.find(hdl);
-		if (it != m_data.clientData.end())
-		{
-			lock_guard<mutex> lock(m_data.clientDataMtx);
-
-			clientData = it->second;
-			m_data.clientData.erase(it);
-		}
+		lock_guard<mutex> lock(m_data.clientDataMtx);
+		m_data.clientData.erase(m_data.clientData.find(hdl));
 	}
 
-	if (clientData)
+	auto& dataSets = clientData->getMatchData().getClientDataSets();
+
+	for (auto&& it : dataSets)
 	{
-		auto& dataSets = clientData->getMatchData().getClientDataSets();
+		if (*it == *clientData)
+			dataSets.erase(it);
+		else
+			send(it->getConnHdl(), json::userLeft(clientData->username));
+	}
 
-		for (auto&& it : dataSets)
+	// if this was the last / only player connected
+	// to this match, remove the match completely
+	if (dataSets.empty())
+	{
+		auto matchID = clientData->getMatchData().getMatch().getID();
+
 		{
-			if (*it == *clientData)
-				dataSets.erase(it);
-			else
-				send(it->getConnHdl(), json::userLeft(clientData->username));
+			lock_guard<mutex> lock(m_data.matchDataMtx);
+
+			auto it = m_data.matchData.find(matchID);
+			if (it != m_data.matchData.end())
+				m_data.matchData.erase(it);
 		}
 
-		// if this was the last / only player connected
-		// to this match, remove the match completely
-		if (dataSets.empty())
+		for (GamesListID list : { RANDOM_GAMES, PUBLIC_GAMES })
 		{
-			auto matchID = clientData->getMatchData().getMatch().getID();
-
+			auto it = m_data.gameLists[list].find(matchID);
+			if (it != m_data.gameLists[list].end())
 			{
-				lock_guard<mutex> lock(m_data.matchDataMtx);
-
-				auto it = m_data.matchData.find(matchID);
-				if (it != m_data.matchData.end())
-					m_data.matchData.erase(it);
-			}
-
-			for (GamesListID list : { RANDOM_GAMES, PUBLIC_GAMES })
-			{
-				auto it = m_data.gameLists[list].find(matchID);
-				if (it != m_data.gameLists[list].end())
 				{
-					{
-						lock_guard<mutex> lock(m_data.gameListsMtx[list]);
-						m_data.gameLists[list].erase(it);
-					}
-
-					listUpdated(list);
+					lock_guard<mutex> lock(m_data.gameListsMtx[list]);
+					m_data.gameLists[list].erase(it);
 				}
-			}
 
-			/*thread([=] {
-				this_thread::sleep_for(milliseconds(50));
-				cyvdb::MatchManager().removeMatch(matchID);
-			}).detach();*/
+				listUpdated(list);
+			}
 		}
+
+		/*thread([=] {
+			this_thread::sleep_for(milliseconds(50));
+			cyvdb::MatchManager().removeMatch(matchID);
+		}).detach();*/
 	}
 }
 

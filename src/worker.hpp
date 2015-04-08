@@ -37,8 +37,6 @@ class Worker
 
 		unsigned m_curMsgID;
 
-		std::shared_ptr<ClientData> getClientData(connection_hdl);
-
 		std::string newMatchID();
 		std::string newPlayerID();
 
@@ -53,6 +51,7 @@ class Worker
 		void processInitCommRequest(connection_hdl, const Json::Value& param);
 		void processCreateGameRequest(connection_hdl, const Json::Value& param);
 		void processJoinGameRequest(connection_hdl, const Json::Value& param);
+		void processSetUsernameRequest(connection_hdl, const Json::Value& param);
 		void processSubscrGameListRequest(connection_hdl, const Json::Value& param);
 		void processUnsubscrGameListRequest(connection_hdl, const Json::Value& param);
 

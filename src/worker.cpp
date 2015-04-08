@@ -69,19 +69,6 @@ Worker::~Worker()
 	m_thread.join();
 }
 
-shared_ptr<ClientData> Worker::getClientData(connection_hdl hdl)
-{
-	shared_ptr<ClientData> ret;
-
-	lock_guard<mutex> clientDataLock(m_data.clientDataMtx);
-
-	auto it1 = m_data.clientData.find(hdl);
-	if (it1 != m_data.clientData.end())
-		ret = it1->second;
-
-	return ret;
-}
-
 string Worker::newMatchID()
 {
 	static ranlux24 int24Generator(system_clock::now().time_since_epoch().count());
@@ -214,7 +201,7 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 
 void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
-	if (getClientData(clientConnHdl))
+	if (m_data.getClientData(clientConnHdl))
 		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
 	else
 	{
@@ -279,7 +266,7 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 
 	auto matchIt = m_data.matchData.find(param[MATCH_ID].asString());
 
-	if (getClientData(clientConnHdl))
+	if (m_data.getClientData(clientConnHdl))
 		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
 	else if (matchIt == m_data.matchData.end())
 		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_NOT_FOUND));
@@ -370,6 +357,11 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 	}
 }
 
+void WorkerprocessSetUsernameRequest(connection_hdl, const Json::Value& param)
+{
+	// TODO
+}
+
 void Worker::processSubscrGameListRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
 	vector<Json::Value> listUpdates;
@@ -443,7 +435,7 @@ void Worker::processUnsubscrGameListRequest(connection_hdl clientConnHdl, const 
 
 void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	auto clientData = getClientData(clientConnHdl);
+	auto clientData = m_data.getClientData(clientConnHdl);
 	if (!clientData)
 		return; // TODO: log an error
 
@@ -455,7 +447,7 @@ void Worker::processChatMsg(connection_hdl clientConnHdl, const Json::Value& msg
 
 void Worker::processGameMsg(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	auto clientData = getClientData(clientConnHdl);
+	auto clientData = m_data.getClientData(clientConnHdl);
 	if (!clientData)
 		return; // TODO: log an error
 
@@ -520,7 +512,7 @@ void Worker::processPromoteMsg(ClientData& clientData, const Json::Value& param)
 
 void Worker::distributeMessage(connection_hdl clientConnHdl, const Json::Value& msg)
 {
-	auto clientData = getClientData(clientConnHdl);
+	auto clientData = m_data.getClientData(clientConnHdl);
 
 	if (clientData)
 	{

@@ -1,4 +1,4 @@
-/* Copyright 2014 Jonas Platte
+/* Copyright 2014 - 2015 Jonas Platte
  *
  * This file is part of Cyvasse Online.
  *
@@ -20,6 +20,7 @@
 #include <array>
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <cyvws/notification.hpp>
 
@@ -70,6 +71,8 @@ struct SharedServerData
 
 	std::array<ConnectionSet, 2> listSubscribers;
 	std::array<std::mutex, 2>    listSubscribersMtx;
+
+	auto getClientData(connection_hdl hdl) -> std::shared_ptr<ClientData>;
 };
 
 enum GamesListID
