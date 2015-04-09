@@ -62,7 +62,7 @@ int main()
 		server = make_unique<CyvasseServer>();
 		server->run(listenPort, 1);
 	}
-	catch(std::exception& e)
+	catch (std::exception& e)
 	{
 		cerr << "server exception: " << e.what() << endl;
 		retVal = 1;
@@ -75,7 +75,7 @@ int main()
 void createPidFile()
 {
 	ofstream pidFile(pidFileName);
-	if(pidFile)
+	if (pidFile)
 	{
 		pidFile << getpid() << endl;
 		pidFile.close();
@@ -87,48 +87,61 @@ void removePidFile()
 	remove(pidFileName);
 }
 
-extern "C" void stopServer(int /* signal */)
+extern "C"
 {
-	if(server)
+	void stopServer(int /* signal */)
 	{
-		server->stop();
-		server.reset();
+		if (server)
+		{
+			server->stop();
+			server.reset();
 
-		removePidFile();
+			removePidFile();
+		}
+
+		exit(0);
 	}
 
-	exit(0);
+	void maintainanceMode(int /* signal */)
+	{
+		if (!server)
+			return;
+
+		server->maintenanceMode();
+	}
 }
 
 void setupSignals()
 {
 #ifdef HAVE_SIGACTION
-	struct sigaction newAction, oldAction;
+	struct sigaction stopAction, oldAction;
 
 	// setup sigaction struct for stopServer
-	newAction.sa_handler = stopServer;
-	sigemptyset(&newAction.sa_mask);
-	newAction.sa_flags = 0;
+	stopAction.sa_handler = stopServer;
+	sigemptyset(&stopAction.sa_mask);
+	stopAction.sa_flags = 0;
 
 	sigaction(SIGHUP, nullptr, &oldAction);
-	if(oldAction.sa_handler != SIG_IGN)
-		sigaction(SIGHUP, &newAction, nullptr);
+	if (oldAction.sa_handler != SIG_IGN)
+		sigaction(SIGHUP, &stopAction, nullptr);
 
 	sigaction(SIGINT, nullptr, &oldAction);
-	if(oldAction.sa_handler != SIG_IGN)
-		sigaction(SIGINT, &newAction, nullptr);
+	if (oldAction.sa_handler != SIG_IGN)
+		sigaction(SIGINT, &stopAction, nullptr);
 
 	sigaction(SIGTERM, nullptr, &oldAction);
-	if(oldAction.sa_handler != SIG_IGN)
-		sigaction(SIGTERM, &newAction, nullptr);
+	if (oldAction.sa_handler != SIG_IGN)
+		sigaction(SIGTERM, &stopAction, nullptr);
 #else
-	if(signal(SIGHUP, stopServer) == SIG_IGN)
+	if (signal(SIGHUP, stopServer) == SIG_IGN)
 		signal(SIGHUP, SIG_IGN);
 
-	if(signal(SIGINT, stopServer) == SIG_IGN)
+	if (signal(SIGINT, stopServer) == SIG_IGN)
 		signal(SIGINT, SIG_IGN);
 
-	if(signal(SIGTERM, stopServer) == SIG_IGN)
+	if (signal(SIGTERM, stopServer) == SIG_IGN)
 		signal(SIGTERM, SIG_IGN);
 #endif
+
+	signal(SIGUSR1, maintainanceMode);
 }

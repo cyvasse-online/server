@@ -54,6 +54,7 @@ struct SharedServerData
 	using ConnectionSet = std::set<connection_hdl, std::owner_less<connection_hdl>>;
 
 	std::atomic_bool running = {true};
+	std::atomic_bool maintenance = {false};
 
 	std::queue<Job> jobQueue;
 

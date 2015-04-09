@@ -201,64 +201,73 @@ void Worker::processInitCommRequest(connection_hdl clientConnHdl, const Json::Va
 
 void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::Value& param)
 {
-	if (m_data.getClientData(clientConnHdl))
-		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
-	else
+	if (m_data.maintenance)
 	{
-		//auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
-		auto color   = StrToPlayersColor(param[COLOR].asString());
-		auto random  = param[RANDOM].asBool();
-		//auto _public = param[PUBLIC].asBool(); // TODO
-
-		auto matchID  = newMatchID();
-		auto playerID = newPlayerID();
-
-		// TODO: Check whether all necessary parameters are set and valid
-
-		auto matchData = make_shared<MatchData>(matchID);
-		auto clientData = make_shared<ClientData>(
-			matchData->getMatch(), color, playerID, clientConnHdl, *matchData
-		);
-
-		matchData->getClientDataSets().insert(clientData);
-
-		{
-			lock_guard<mutex> lock(m_data.clientDataMtx);
-			auto tmp = m_data.clientData.emplace(clientConnHdl, clientData);
-			assert(tmp.second);
-		}
-
-		{
-			lock_guard<mutex> lock(m_data.matchDataMtx);
-			auto tmp = m_data.matchData.emplace(matchID, matchData);
-			assert(tmp.second);
-		}
-
-		m_server.send(clientConnHdl, json::createGameSuccess(m_curMsgID, matchID, playerID));
-
-		if (random)
-		{
-			{
-				lock_guard<mutex> lock(m_data.gameListsMtx[RANDOM_GAMES]);
-
-				// TODO: send a meaningful title instead of "A game"
-				m_data.gameLists[RANDOM_GAMES].emplace(matchID, GamesListMappedType { "Match with a random user", !color });
-			}
-
-			m_server.listUpdated(RANDOM_GAMES);
-		}
-
-		// TODO
-		/*thread([=] {
-			this_thread::sleep_for(milliseconds(50));
-
-			auto match = createMatch(ruleSet, matchID, random, _public);
-			auto player = createPlayer(*match, color, playerID);
-
-			cyvdb::MatchManager().addMatch(move(match));
-			cyvdb::PlayerManager().addPlayer(move(player));
-		}).detach();*/
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::MAINTENANCE_MODE));
+		return;
 	}
+
+	if (m_data.getClientData(clientConnHdl))
+	{
+		m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::CONN_IN_USE));
+		return;
+	}
+
+	//auto ruleSet = StrToRuleSet(param[RULE_SET].asString());
+	auto color   = StrToPlayersColor(param[COLOR].asString());
+	auto random  = param[RANDOM].asBool();
+	//auto _public = param[PUBLIC].asBool(); // TODO
+
+	auto matchID  = newMatchID();
+	auto playerID = newPlayerID();
+
+	// TODO: Check whether all necessary parameters are set and valid
+
+	auto matchData = make_shared<MatchData>(matchID);
+	auto clientData = make_shared<ClientData>(
+		matchData->getMatch(), color, playerID, clientConnHdl, *matchData
+	);
+
+	matchData->getClientDataSets().insert(clientData);
+
+	{
+		lock_guard<mutex> lock(m_data.clientDataMtx);
+		auto tmp = m_data.clientData.emplace(clientConnHdl, clientData);
+		assert(tmp.second);
+	}
+
+	{
+		lock_guard<mutex> lock(m_data.matchDataMtx);
+		auto tmp = m_data.matchData.emplace(matchID, matchData);
+		assert(tmp.second);
+
+		m_server.updateMatchCount();
+	}
+
+	m_server.send(clientConnHdl, json::createGameSuccess(m_curMsgID, matchID, playerID));
+
+	if (random)
+	{
+		{
+			lock_guard<mutex> lock(m_data.gameListsMtx[RANDOM_GAMES]);
+
+			// TODO: send a meaningful title instead of "A game"
+			m_data.gameLists[RANDOM_GAMES].emplace(matchID, GamesListMappedType { "Match with a random user", !color });
+		}
+
+		m_server.listUpdated(RANDOM_GAMES);
+	}
+
+	// TODO
+	/*thread([=] {
+		this_thread::sleep_for(milliseconds(50));
+
+		auto match = createMatch(ruleSet, matchID, random, _public);
+		auto player = createPlayer(*match, color, playerID);
+
+		cyvdb::MatchManager().addMatch(move(match));
+		cyvdb::PlayerManager().addPlayer(move(player));
+	}).detach();*/
 }
 
 void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Value& param)

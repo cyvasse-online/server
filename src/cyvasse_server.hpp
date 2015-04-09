@@ -40,6 +40,8 @@ class CyvasseServer
 		void run(uint16_t port, unsigned nWorkers);
 		void stop();
 
+		void maintenanceMode();
+
 		void listUpdated(GamesListID);
 
 		void unsubscribe(websocketpp::connection_hdl, GamesListID);
@@ -52,6 +54,10 @@ class CyvasseServer
 
 		void send(websocketpp::connection_hdl, const std::string&);
 		void send(websocketpp::connection_hdl, const Json::Value&);
+
+		// quick and dirty way of looking up the amount of currently active games
+		// should be replaced by the database somewhen
+		void updateMatchCount();
 };
 
 #endif // _CYVASSE_SERVER_HPP_

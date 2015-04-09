@@ -19,8 +19,12 @@ config.yml
 
 # common user-created files
 
-*.pid
 nohup.out
+
+# created by the program
+
+*.pid
+match_count
 
 # compiled files
 

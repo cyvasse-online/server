@@ -76,6 +76,11 @@ void CyvasseServer::stop()
 	m_data.jobCond.notify_all();
 }
 
+void CyvasseServer::maintenanceMode()
+{
+	m_data.maintenance = true;
+}
+
 void CyvasseServer::listUpdated(GamesListID list)
 {
 	if (!m_data.listSubscribers[list].empty())
@@ -157,6 +162,8 @@ void CyvasseServer::onClose(connection_hdl hdl)
 			auto it = m_data.matchData.find(matchID);
 			if (it != m_data.matchData.end())
 				m_data.matchData.erase(it);
+
+			updateMatchCount();
 		}
 
 		for (GamesListID list : { RANDOM_GAMES, PUBLIC_GAMES })
@@ -201,4 +208,13 @@ void CyvasseServer::send(connection_hdl hdl, const string& data)
 void CyvasseServer::send(connection_hdl hdl, const Json::Value& data)
 {
 	send(hdl, Json::FastWriter().write(data));
+}
+
+#include <fstream>
+
+void CyvasseServer::updateMatchCount()
+{
+	ofstream os("match_count");
+	os << m_data.matchData.size() << endl;
+	os.close();
 }
