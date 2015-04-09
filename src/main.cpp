@@ -23,7 +23,7 @@
 
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
-#include <cyvdb/config.hpp>
+//#include <cyvdb/config.hpp>
 #include "cyvasse_server.hpp"
 
 using namespace std;
@@ -43,7 +43,7 @@ int main()
 
 	auto config = YAML::LoadFile("config.yml");
 	auto listenPort   = config["listenPort"].as<int>();
-	auto matchDataUrl = config["matchDataUrl"].as<string>();
+	/*auto matchDataUrl = config["matchDataUrl"].as<string>();
 
 	if(matchDataUrl.empty())
 	{
@@ -51,7 +51,7 @@ int main()
 		exit(1);
 	}
 
-	cyvdb::DBConfig::glob().setMatchDataUrl(matchDataUrl);
+	cyvdb::DBConfig::glob().setMatchDataUrl(matchDataUrl);*/
 
 	int retVal = 0;
 
