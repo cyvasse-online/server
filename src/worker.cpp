@@ -240,8 +240,9 @@ void Worker::processCreateGameRequest(connection_hdl clientConnHdl, const Json::
 		{
 			{
 				lock_guard<mutex> lock(m_data.gameListsMtx[RANDOM_GAMES]);
+
 				// TODO: send a meaningful title instead of "A game"
-				m_data.gameLists[RANDOM_GAMES].emplace(matchID, GamesListMappedType { "A game", !color });
+				m_data.gameLists[RANDOM_GAMES].emplace(matchID, GamesListMappedType { "Match with a random user", !color });
 			}
 
 			m_server.listUpdated(RANDOM_GAMES);
@@ -375,12 +376,26 @@ void Worker::processSetUsernameRequest(connection_hdl clientConnHdl, const Json:
 	auto oldUsername = clientData->username;
 	clientData->username = newUsername;
 
-	auto notificationStr = Json::FastWriter().write(json::usernameUpdate(oldUsername, newUsername));
-	for (const auto& it : clientData->getMatchData().getClientDataSets())
+	auto& matchData = clientData->getMatchData();
+
+	if (matchData.getClientDataSets().size() > 1)
 	{
-		auto&& hdl = it->getConnHdl();
-		if (hdl.owner_before(clientConnHdl) || clientConnHdl.owner_before(hdl)) // test for inequality
-			m_server.send(hdl, notificationStr);
+		auto notificationStr = Json::FastWriter().write(json::usernameUpdate(oldUsername, newUsername));
+		for (const auto& it : matchData.getClientDataSets())
+		{
+			auto&& hdl = it->getConnHdl();
+			if (hdl.owner_before(clientConnHdl) || clientConnHdl.owner_before(hdl)) // test for inequality
+				m_server.send(hdl, notificationStr);
+		}
+	}
+	else
+	{
+		auto it = m_data.gameLists[RANDOM_GAMES].find(matchData.getMatch().getID());
+		if (it != m_data.gameLists[RANDOM_GAMES].end())
+		{
+			it->second.title = "Match with " + newUsername;
+			m_server.listUpdated(RANDOM_GAMES);
+		}
 	}
 
 	m_server.send(clientConnHdl, json::requestSuccess(m_curMsgID));
