@@ -187,7 +187,15 @@ void CyvasseServer::onHttpRequest(connection_hdl)
 
 void CyvasseServer::send(connection_hdl hdl, const string& data)
 {
-	m_wsServer.send(hdl, data, frame::opcode::text);
+	// sending can fail, but that's not a good reason to crash!
+	// maybe we should log when this happens, but for now it's
+	// only important that it doesn't kill the whole server.
+	try
+	{
+		m_wsServer.send(hdl, data, frame::opcode::text);
+	}
+	catch(std::exception& e)
+	{ }
 }
 
 void CyvasseServer::send(connection_hdl hdl, const Json::Value& data)
