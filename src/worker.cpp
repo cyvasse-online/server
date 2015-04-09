@@ -279,6 +279,8 @@ void Worker::processJoinGameRequest(connection_hdl clientConnHdl, const Json::Va
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_EMPTY));
 		else if (matchClients.size() > 1)
 			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_FULL));
+		else if (!matchData->getMatch().inSetup()) // temporary [TODO]
+			m_server.send(clientConnHdl, json::requestErr(m_curMsgID, ServerReplyErrMsg::GAME_IN_SETUP));
 		else
 		{
 			const auto& opponentData = *matchClients.begin();
